@@ -196,7 +196,7 @@ async function notifyAdmin(userId) {
       inline_keyboard: [
         [{ text: '✅ Подтвердить оплату', callback_data: `confirm_payment_${userId}` }],
         [{ text: '❌ Отменить заказ', callback_data: `cancel_order_${userId}` }],
-        [{ text: '💬 Написать клиенту', callback_data: `message_client_${userId}` }]
+        [{ text: '💬 Написать Анастасии', callback_data: `message_client_${userId}` }]
       ]
     }
   });
