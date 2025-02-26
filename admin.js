@@ -39,13 +39,13 @@ async function notifyAdmin(userId) {
     // Отправляем сообщение администратору
     await bot.telegram.sendMessage(ADMIN_ID, message, { 
       parse_mode: 'Markdown',
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: '✅ Подтвердить оплату', callback_data: `confirm_payment_${userId}` }],
-          [{ text: '❌ Отменить заказ', callback_data: `cancel_order_${userId}` }],
-          [{ text: '💬 Написать клиенту', callback_data: `message_client_${userId}` }]
-        ]
-      }
+    reply_markup: {
+  inline_keyboard: [
+    [{ text: '✅ Подтвердить оплату', callback_data: `confirm_payment_${userId}` }],
+    [{ text: '❌ Отменить заказ', callback_data: `cancel_order_${userId}` }],
+    [{ text: '💬 Открыть чат с клиентом', url: `tg://user?id=${userId}` }]
+  ]
+}
     });
     
     logWithTime(`Отправлено уведомление администратору о заказе пользователя ${userId}`);
