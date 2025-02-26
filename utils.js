@@ -18,6 +18,22 @@ function mainKeyboard() {
   ]);
 }
 
+// Функция для удаления клавиатуры
+function removeKeyboard() {
+  return Markup.removeKeyboard();
+}
+
+// Функция для отправки сообщения с удалением клавиатуры и добавлением inline-кнопок
+async function sendMessageWithInlineKeyboard(ctx, text, options = {}) {
+  return await ctx.reply(text, {
+    ...options,
+    reply_markup: {
+      ...mainKeyboard().reply_markup,
+      remove_keyboard: true
+    }
+  });
+}
+
 // Кэш для существования файлов
 const fileExistsCache = new Map();
 
@@ -59,6 +75,8 @@ const validators = {
 
 module.exports = {
   mainKeyboard,
+  removeKeyboard,
+  sendMessageWithInlineKeyboard,
   fileExists,
   logWithTime,
   validators
