@@ -8,7 +8,7 @@ const fs = require('fs');
 
 // Импортируем модули
 const { products, messageTemplates } = require('./data');
-const { mainKeyboard, fileExists, logWithTime } = require('./utils');
+const { mainKeyboard, removeKeyboard, sendMessageWithInlineKeyboard, fileExists, logWithTime } = require('./utils');
 const { handleStart, handleBuyAction, handleTextInput } = require('./handlers');
 const { notifyAdmin, confirmPayment } = require('./admin');
 
@@ -31,30 +31,7 @@ global.botData = {
 };
 
 // Обработчики команд
-bot.start(async (ctx) => {
-  try {
-    const userId = ctx.from.id;
-    const firstName = ctx.from.first_name || 'друг';
-    
-    await ctx.reply(
-      `👋 Приветствую, ${firstName}!\n\nЯ бот Анастасии Поповой, инструктора по дыхательным практикам. Через меня вы можете приобрести курсы и получить материалы.\n\nЧем могу помочь?`,
-      mainKeyboard()
-    );
-
-    // Уведомление администратору о новом пользователе, но только если это не сам админ
-    if (userId !== parseInt(ADMIN_ID)) {
-      // Отправляем уведомление админу асинхронно
-      bot.telegram.sendMessage(
-        ADMIN_ID,
-        `🆕 Новый пользователь:\n- Имя: ${firstName} ${ctx.from.last_name || ''}\n- Username: @${ctx.from.username || 'отсутствует'}\n- ID: ${userId}`
-      ).catch(e => console.error(`Ошибка при уведомлении админа: ${e.message}`));
-    }
-    
-    logWithTime(`Новый пользователь: ${userId}, ${ctx.from.username || 'без username'}`);
-  } catch (error) {
-    console.error(`Ошибка в обработчике /start: ${error.message}`);
-  }
-});
+bot.start(handleStart);
 
 // Обработчики для inline-кнопок
 bot.action('show_products', async (ctx) => {
@@ -96,7 +73,10 @@ bot.action('show_info', async (ctx) => {
       `ℹ️ *О курсах дыхательных практик*\n\n*Анастасия Попова* - сертифицированный инструктор по дыхательным практикам с опытом более 7 лет.\n\nНаши курсы помогут вам:\n\n• Повысить жизненную энергию\n• Снизить уровень стресса\n• Улучшить качество сна\n• Повысить иммунитет\n• Улучшить работу дыхательной системы\n\nВыберите "🛒 Купить курс" в меню, чтобы ознакомиться с доступными программами.`,
       { 
         parse_mode: 'Markdown',
-        ...mainKeyboard()
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
       }
     );
     
@@ -127,57 +107,37 @@ bot.action('show_purchases', async (ctx) => {
       
       await ctx.reply(message, { 
         parse_mode: 'Markdown',
-        ...mainKeyboard()
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
       });
       
       await ctx.answerCbQuery();
       logWithTime(`Пользователь ${userId} просмотрел свои покупки`);
     } else {
-      await ctx.reply(messageTemplates.noPurchases, mainKeyboard());
+      await ctx.reply(messageTemplates.noPurchases, {
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
+      });
       await ctx.answerCbQuery('У вас пока нет покупок');
     }
   } catch (error) {
     console.error(`Ошибка при просмотре покупок: ${error.message}`);
-    await ctx.reply('Произошла ошибка при загрузке ваших покупок. Пожалуйста, попробуйте позже.', mainKeyboard());
+    await ctx.reply('Произошла ошибка при загрузке ваших покупок. Пожалуйста, попробуйте позже.', {
+      reply_markup: {
+        ...mainKeyboard().reply_markup,
+        remove_keyboard: true
+      }
+    });
     await ctx.answerCbQuery('Произошла ошибка');
   }
 });
 
 // Обработка покупок
-bot.action(/buy_(.+)/, async (ctx) => {
-  try {
-    const productId = ctx.match[1];
-    const userId = ctx.from.id;
-    const product = products[productId];
-    
-    if (!product) {
-      await ctx.reply('❌ Продукт не найден. Пожалуйста, выберите из доступных вариантов.', mainKeyboard());
-      return await ctx.answerCbQuery();
-    }
-
-    // Используем шаблонное сообщение
-    await ctx.reply(
-      messageTemplates.emailRequest(product.name),
-      { parse_mode: 'Markdown' }
-    );
-    
-    // Сохраняем информацию о выбранном продукте
-    pendingOrders[userId] = {
-      productId,
-      status: 'waiting_email',
-      timestamp: new Date().toISOString()
-    };
-    
-    // Сразу уведомляем пользователя о обработке запроса для лучшего UX
-    await ctx.answerCbQuery('✅ Продукт выбран');
-    
-    logWithTime(`Пользователь ${userId} выбрал продукт: ${product.name}`);
-  } catch (error) {
-    console.error(`Ошибка при выборе продукта: ${error.message}`);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.', mainKeyboard());
-    await ctx.answerCbQuery('Произошла ошибка');
-  }
-});
+bot.action(/buy_(.+)/, handleBuyAction);
 
 // Обработка текстовых сообщений для email и телефона
 bot.on('text', handleTextInput);
@@ -233,7 +193,12 @@ bot.action(/cancel_order_(\d+)/, async (ctx) => {
       await bot.telegram.sendMessage(
         clientId,
         `❌ Ваш заказ "${product.name}" был отменен.\n\nЕсли у вас возникли вопросы, пожалуйста, свяжитесь с Анастасией.`,
-        mainKeyboard()
+        {
+          reply_markup: {
+            ...mainKeyboard().reply_markup,
+            remove_keyboard: true
+          }
+        }
       );
       
       // Удаляем заказ из ожидающих
@@ -319,10 +284,15 @@ bot.on('message', async (ctx) => {
       return;
     }
     
-    // Для остальных сообщений показываем подсказку
+    // Для остальных сообщений показываем подсказку и удаляем клавиатуру
     await ctx.reply(
       'Используйте кнопки меню для навигации или напишите /start, чтобы начать заново.',
-      mainKeyboard()
+      {
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
+      }
     );
   } catch (error) {
     console.error(`Ошибка при обработке неизвестного сообщения: ${error.message}`);
