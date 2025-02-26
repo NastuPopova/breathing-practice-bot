@@ -8,9 +8,9 @@ services:
     healthCheckPath: /ping
     envVars:
       - key: BOT_TOKEN
-        value: 8131277180:AAFua4Um2wGYbWEUh8JlJ7s6I3vgzmIHNJM
+        sync: false
       - key: ADMIN_ID
-        value: 1389064275
+        sync: false
       - key: APP_URL
         value: https://breathing-practice-bot.onrender.com
     autoDeploy: true
