@@ -40,7 +40,8 @@ bot.action('show_products', async (ctx) => {
       '📚 Выберите продукт:',
       Markup.inlineKeyboard([
         [Markup.button.callback('🔰 Стартовый комплект - 990 ₽', 'buy_starter')],
-        [Markup.button.callback('👥 Индивидуальная консультация - 1500 ₽', 'buy_consultation')],
+        [Markup.button.callback('👤 Индивидуальное занятие - 2000 ₽', 'buy_individual')],
+        [Markup.button.callback('🎯 Пакет 3 занятия - 4500 ₽', 'buy_package')],
         [Markup.button.callback('🏆 Полный курс видеоуроков - 14 999 ₽', 'buy_course')],
         [Markup.button.callback('◀️ Назад', 'back_to_menu')]
       ])
@@ -53,6 +54,8 @@ bot.action('show_products', async (ctx) => {
     await ctx.answerCbQuery('Произошла ошибка');
   }
 });
+
+
 
 bot.action('back_to_menu', async (ctx) => {
   try {
