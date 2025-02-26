@@ -123,13 +123,16 @@ async function confirmPayment(clientId) {
       // Небольшая задержка между сообщениями
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Отправляем дополнительную информацию и кнопки меню
+      // Отправляем дополнительную информацию с меню и удаляем клавиатуру
       await bot.telegram.sendMessage(
         clientId,
         messageTemplates.orderComplete,
         { 
           parse_mode: 'Markdown',
-          ...mainKeyboard()
+          reply_markup: {
+            ...mainKeyboard().reply_markup,
+            remove_keyboard: true
+          }
         }
       );
     } catch (error) {
