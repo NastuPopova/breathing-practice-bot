@@ -1,46 +1,6 @@
 // Файл: index.js
 // Основной файл Telegram-бота с inline-кнопками
 
-// Добавьте импорт в начало файла index.js
-const { setupPing } = require('./ping');
-const { setupScheduler } = require('./scheduler');
-
-// Замените этот код на обновленный запуск бота
-bot.launch()
-  .then(() => {
-    console.log('Bot has been started');
-    logWithTime('Бот успешно запущен');
-    
-    // Настройка планировщика задач
-    setupScheduler(bot, ADMIN_ID);
-    
-    // Настройка самопинга (если указан URL приложения)
-    const appUrl = process.env.APP_URL;
-    if (appUrl) {
-      setupPing(appUrl, 14); // пинг каждые 14 минут (меньше 15 мин для Render)
-      logWithTime(`Настроен самопинг для ${appUrl}`);
-    } else {
-      logWithTime('APP_URL не указан в .env, самопинг не настроен');
-    }
-  })
-  .catch(err => {
-    console.error('Error starting bot:', err);
-    logWithTime(`Ошибка при запуске бота: ${err.message}`);
-  });
-
-// Настройка graceful shutdown
-process.once('SIGINT', () => {
-  logWithTime('Получен сигнал SIGINT, останавливаем бота...');
-  bot.stop('SIGINT');
-  logWithTime('Бот остановлен по SIGINT');
-});
-
-process.once('SIGTERM', () => {
-  logWithTime('Получен сигнал SIGTERM, останавливаем бота...');
-  bot.stop('SIGTERM');
-  logWithTime('Бот остановлен по SIGTERM');
-});
-
 const { Telegraf, Markup } = require('telegraf');
 require('dotenv').config();
 const express = require('express');
@@ -51,6 +11,8 @@ const { products, messageTemplates } = require('./data');
 const { mainKeyboard, consultationsKeyboard, removeKeyboard, sendMessageWithInlineKeyboard, fileExists, logWithTime } = require('./utils');
 const { handleStart, handleBuyAction, handleTextInput } = require('./handlers');
 const { notifyAdmin, confirmPayment, sendConsultationRecording } = require('./admin');
+const { setupPing } = require('./ping');
+const { setupScheduler } = require('./scheduler');
 
 // Создание бота с токеном от BotFather
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -487,22 +449,39 @@ bot.on('message', async (ctx) => {
 bot.launch()
   .then(() => {
     console.log('Bot has been started');
-    logWithTime('Бот запущен');
+    logWithTime('Бот успешно запущен');
+    
+    // Настройка планировщика задач
+    setupScheduler(bot, ADMIN_ID);
+    
+    // Настройка самопинга (если указан URL приложения)
+    const appUrl = process.env.APP_URL;
+    if (appUrl) {
+      setupPing(appUrl, 14); // пинг каждые 14 минут (меньше 15 мин для Render)
+      logWithTime(`Настроен самопинг для ${appUrl}`);
+    } else {
+      logWithTime('APP_URL не указан в .env, самопинг не настроен');
+    }
   })
   .catch(err => {
     console.error('Error starting bot:', err);
     logWithTime(`Ошибка при запуске бота: ${err.message}`);
   });
 
-// Enable graceful stop
+// Настройка graceful shutdown
 process.once('SIGINT', () => {
+  logWithTime('Получен сигнал SIGINT, останавливаем бота...');
   bot.stop('SIGINT');
   logWithTime('Бот остановлен по SIGINT');
 });
+
 process.once('SIGTERM', () => {
+  logWithTime('Получен сигнал SIGTERM, останавливаем бота...');
   bot.stop('SIGTERM');
   logWithTime('Бот остановлен по SIGTERM');
 });
+
+// НАСТРОЙКА EXPRESS СЕРВЕРА
 
 // Создаем Express сервер для поддержки хостинга
 const app = express();
