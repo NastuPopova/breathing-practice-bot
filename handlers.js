@@ -3,6 +3,7 @@
 
 const { products, messageTemplates } = require('./data');
 const { mainKeyboard, logWithTime, validators } = require('./utils');
+const { Markup } = require('telegraf');
 
 // Обработчик команды start
 async function handleStart(ctx) {
@@ -55,6 +56,53 @@ async function handleBuyAction(ctx) {
       return await ctx.answerCbQuery();
     }
 
+    // Сначала показываем полное описание с кнопкой покупки
+    // Используем fullDescription если доступно, иначе используем productInfo
+    await ctx.reply(
+      product.fullDescription || product.productInfo,
+      { 
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [Markup.button.callback('💳 Оформить заказ', `confirm_buy_${productId}`)],
+            [Markup.button.callback('◀️ Назад к списку', 'show_products')]
+          ]
+        }
+      }
+    );
+    
+    await ctx.answerCbQuery('✅ Загружаю информацию о продукте');
+    
+    logWithTime(`Пользователь ${userId} просматривает продукт: ${product.name}`);
+  } catch (error) {
+    console.error(`Ошибка при выборе продукта: ${error.message}`);
+    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.', {
+      reply_markup: {
+        ...mainKeyboard().reply_markup,
+        remove_keyboard: true
+      }
+    });
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
+}
+
+// Обработчик подтверждения начала покупки
+async function handleConfirmBuy(ctx) {
+  try {
+    const productId = ctx.match[1];
+    const userId = ctx.from.id;
+    const product = products[productId];
+    
+    if (!product) {
+      await ctx.reply('❌ Продукт не найден. Пожалуйста, выберите из доступных вариантов.', {
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
+      });
+      return await ctx.answerCbQuery();
+    }
+    
     // Используем шаблонное сообщение
     await ctx.reply(
       messageTemplates.emailRequest(product.name),
@@ -69,11 +117,11 @@ async function handleBuyAction(ctx) {
     };
     
     // Сразу уведомляем пользователя о обработке запроса для лучшего UX
-    await ctx.answerCbQuery('✅ Продукт выбран');
+    await ctx.answerCbQuery('✅ Начинаем оформление заказа');
     
-    logWithTime(`Пользователь ${userId} выбрал продукт: ${product.name}`);
+    logWithTime(`Пользователь ${userId} начал оформление заказа: ${product.name}`);
   } catch (error) {
-    console.error(`Ошибка при выборе продукта: ${error.message}`);
+    console.error(`Ошибка при подтверждении покупки: ${error.message}`);
     await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.', {
       reply_markup: {
         ...mainKeyboard().reply_markup,
@@ -175,5 +223,6 @@ async function handleTextInput(ctx) {
 module.exports = {
   handleStart,
   handleBuyAction,
+  handleConfirmBuy,
   handleTextInput
 };
