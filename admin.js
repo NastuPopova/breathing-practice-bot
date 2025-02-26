@@ -175,4 +175,3 @@ module.exports = {
   notifyAdmin,
   confirmPayment
 };
-    
