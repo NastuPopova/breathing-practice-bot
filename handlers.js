@@ -57,20 +57,20 @@ async function handleBuyAction(ctx) {
       }
     };
 
-    // Проверяем тип контекста
-    if (ctx.updateType === 'callback_query') {
-      try {
-        // Пытаемся отредактировать существующее сообщение
-        await ctx.editMessageText(messageContent, messageOptions);
+    try {
+      // Пытаемся отредактировать существующее сообщение
+      await ctx.editMessageText(messageContent, messageOptions);
+      await ctx.answerCbQuery('✅ Информация о продукте');
+    } catch (editError) {
+      // Если редактирование не удалось (например, сообщение уже отправлено)
+      if (editError.description === 'Bad Request: message is not modified') {
+        // Просто подтверждаем запрос, не делая ничего
         await ctx.answerCbQuery('✅ Информация о продукте');
-      } catch (editError) {
-        // Если редактирование не удалось, отправляем новое сообщение
+      } else {
+        // Для других ошибок отправляем новое сообщение
         await ctx.reply(messageContent, messageOptions);
         await ctx.answerCbQuery('✅ Информация о продукте');
       }
-    } else {
-      // Для других типов контекста просто отправляем сообщение
-      await ctx.reply(messageContent, messageOptions);
     }
     
     logWithTime(`Пользователь ${ctx.from.id} просматривает продукт: ${product.name}`);
