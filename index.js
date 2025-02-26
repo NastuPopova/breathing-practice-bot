@@ -8,9 +8,9 @@ const fs = require('fs');
 
 // Импортируем модули
 const { products, messageTemplates } = require('./data');
-const { mainKeyboard, removeKeyboard, sendMessageWithInlineKeyboard, fileExists, logWithTime } = require('./utils');
+const { mainKeyboard, consultationsKeyboard, removeKeyboard, sendMessageWithInlineKeyboard, fileExists, logWithTime } = require('./utils');
 const { handleStart, handleBuyAction, handleTextInput } = require('./handlers');
-const { notifyAdmin, confirmPayment } = require('./admin');
+const { notifyAdmin, confirmPayment, sendConsultationRecording } = require('./admin');
 
 // Создание бота с токеном от BotFather
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -27,7 +27,8 @@ global.botData = {
   bot,
   ADMIN_ID,
   pendingOrders,
-  completedOrders
+  completedOrders,
+  adminState: null // Для хранения состояния админа
 };
 
 // Обработчики команд
@@ -55,8 +56,6 @@ bot.action('show_products', async (ctx) => {
   }
 });
 
-
-
 bot.action('back_to_menu', async (ctx) => {
   try {
     await ctx.editMessageText(
@@ -73,7 +72,7 @@ bot.action('back_to_menu', async (ctx) => {
 bot.action('show_info', async (ctx) => {
   try {
     await ctx.reply(
-      `ℹ️ *О курсах дыхательных практик*\n\n*Анастасия Попова* - сертифицированный инструктор по дыхательным практикам с опытом более 7 лет.\n\nНаши курсы помогут вам:\n\n• Повысить жизненную энергию\n• Снизить уровень стресса\n• Улучшить качество сна\n• Повысить иммунитет\n• Улучшить работу дыхательной системы\n\nВыберите "🛒 Купить курс" в меню, чтобы ознакомиться с доступными программами.`,
+      `ℹ️ *О курсах дыхательных практик*\n\n*Анастасия Попова* - сертифицированный инструктор по дыхательным практикам.\n\nНаши курсы помогут вам:\n\n• Повысить жизненную энергию\n• Снизить уровень стресса\n• Улучшить качество сна\n• Повысить иммунитет\n• Улучшить работу дыхательной системы\n\nВыберите "🛒 Купить курс" в меню, чтобы ознакомиться с доступными программами.`,
       { 
         parse_mode: 'Markdown',
         reply_markup: {
@@ -139,11 +138,152 @@ bot.action('show_purchases', async (ctx) => {
   }
 });
 
+bot.action('show_consultations', async (ctx) => {
+  try {
+    const userId = ctx.from.id;
+    
+    if (completedOrders[userId]) {
+      // Фильтруем только заказы с консультациями
+      const consultations = completedOrders[userId].filter(
+        order => order.productId === 'individual' || order.productId === 'package'
+      );
+      
+      if (consultations.length > 0) {
+        const consultationLines = consultations.map((order, index) => {
+          const product = products[order.productId];
+          const date = new Date(order.completedAt).toLocaleDateString();
+          const recordingStatus = order.recordingSent 
+            ? `\n   Запись: ✅ Отправлена ${new Date(order.recordingSentDate).toLocaleDateString()}`
+            : '\n   Запись: ⏳ Ожидается';
+          
+          return `${index + 1}. *${product.name}*\n   Дата: ${date}${recordingStatus}`;
+        });
+        
+        const message = '🎬 *Ваши консультации*:\n\n' + 
+                      consultationLines.join('\n\n') + 
+                      '\n\nЗаписи консультаций будут отправлены вам после проведения занятия.';
+        
+        await ctx.reply(message, { 
+          parse_mode: 'Markdown',
+          reply_markup: {
+            ...consultationsKeyboard().reply_markup
+          }
+        });
+        
+      } else {
+        await ctx.reply(
+          'У вас пока нет заказанных консультаций. Выберите "🛒 Купить курс", чтобы приобрести индивидуальное занятие.',
+          {
+            reply_markup: {
+              ...mainKeyboard().reply_markup,
+              remove_keyboard: true
+            }
+          }
+        );
+      }
+    } else {
+      await ctx.reply(
+        'У вас пока нет заказанных консультаций. Выберите "🛒 Купить курс", чтобы приобрести индивидуальное занятие.',
+        {
+          reply_markup: {
+            ...mainKeyboard().reply_markup,
+            remove_keyboard: true
+          }
+        }
+      );
+    }
+    
+    await ctx.answerCbQuery();
+    logWithTime(`Пользователь ${userId} просмотрел свои консультации`);
+  } catch (error) {
+    console.error(`Ошибка при просмотре консультаций: ${error.message}`);
+    await ctx.reply('Произошла ошибка при загрузке ваших консультаций. Пожалуйста, попробуйте позже.', {
+      reply_markup: {
+        ...mainKeyboard().reply_markup,
+        remove_keyboard: true
+      }
+    });
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
+});
+
+bot.action('refresh_consultations', async (ctx) => {
+  try {
+    // Просто перезагружаем экран консультаций
+    await ctx.deleteMessage();
+    await ctx.answerCbQuery('Обновляем список...');
+    
+    // Эмулируем нажатие на кнопку "Мои консультации"
+    const fakeContext = {...ctx};
+    await bot.action('show_consultations')(fakeContext);
+  } catch (error) {
+    console.error(`Ошибка при обновлении консультаций: ${error.message}`);
+    await ctx.answerCbQuery('Произошла ошибка при обновлении');
+  }
+});
+
 // Обработка покупок
 bot.action(/buy_(.+)/, handleBuyAction);
 
 // Обработка текстовых сообщений для email и телефона
-bot.on('text', handleTextInput);
+bot.on('text', async (ctx) => {
+  try {
+    const userId = ctx.from.id;
+    const text = ctx.message.text;
+    
+    // Если это админ и мы ждем ссылку на запись
+    if (userId.toString() === ADMIN_ID.toString() && 
+        global.botData.adminState && 
+        global.botData.adminState.action === 'waiting_recording_link') {
+      
+      // Сохраняем ссылку
+      global.botData.adminState.recordingLink = text;
+      global.botData.adminState.action = 'waiting_recording_notes';
+      
+      await ctx.reply(
+        '✅ Ссылка сохранена.\n\nТеперь вы можете добавить заметки или рекомендации, которые будут отправлены вместе с записью (или отправьте "нет" чтобы пропустить этот шаг).'
+      );
+      
+      return;
+    }
+    
+    // Если это админ и мы ждем заметки к записи
+    if (userId.toString() === ADMIN_ID.toString() && 
+        global.botData.adminState && 
+        global.botData.adminState.action === 'waiting_recording_notes') {
+      
+      const { adminState } = global.botData;
+      const notes = text.toLowerCase() === 'нет' ? '' : text;
+      
+      const success = await sendConsultationRecording(
+        adminState.clientId, 
+        adminState.recordingLink,
+        notes
+      );
+      
+      if (success) {
+        await ctx.reply('✅ Запись консультации успешно отправлена клиенту!');
+      } else {
+        await ctx.reply('❌ Не удалось отправить запись. Проверьте логи для деталей.');
+      }
+      
+      // Очищаем состояние
+      global.botData.adminState = null;
+      
+      return;
+    }
+    
+    // Другие обработчики текста (для email и телефона)
+    await handleTextInput(ctx);
+  } catch (error) {
+    console.error(`Ошибка при обработке текстового ввода: ${error.message}`);
+    if (ctx.from.id.toString() === ADMIN_ID.toString()) {
+      await ctx.reply(`❌ Ошибка: ${error.message}`);
+    } else {
+      await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.');
+    }
+  }
+});
 
 // Обработчики для администратора
 bot.hears(/^\/confirm_(\d+)$/, async (ctx) => {
@@ -177,6 +317,32 @@ bot.action(/confirm_payment_(\d+)/, async (ctx) => {
   } catch (error) {
     console.error(`Ошибка при подтверждении оплаты через кнопку: ${error.message}`);
     await ctx.answerCbQuery(`❌ Ошибка: ${error.message.substring(0, 50)}`);
+  }
+});
+
+bot.action(/prepare_recording_(\d+)/, async (ctx) => {
+  try {
+    // Проверка прав администратора
+    if (ctx.from.id.toString() !== ADMIN_ID.toString()) {
+      return await ctx.answerCbQuery('⛔ У вас нет доступа к этой функции');
+    }
+    
+    const clientId = ctx.match[1];
+    
+    // Сохраняем состояние для последующего ввода ссылки
+    global.botData.adminState = {
+      action: 'waiting_recording_link',
+      clientId
+    };
+    
+    await ctx.reply(
+      `🎥 Подготовка к отправке записи консультации клиенту (ID: ${clientId}).\n\nПожалуйста, отправьте ссылку на запись консультации.`
+    );
+    
+    await ctx.answerCbQuery('Подготовка к отправке записи');
+  } catch (error) {
+    console.error(`Ошибка при подготовке отправки записи: ${error.message}`);
+    await ctx.answerCbQuery('Произошла ошибка');
   }
 });
 
@@ -245,31 +411,6 @@ bot.action(/message_client_(\d+)/, async (ctx) => {
   } catch (error) {
     console.error(`Ошибка при подготовке сообщения клиенту: ${error.message}`);
     await ctx.answerCbQuery('Произошла ошибка');
-  }
-});
-
-// Этот обработчик больше не нужен, можно оставить для совместимости со старыми сообщениями
-bot.hears(/^\/msg_(\d+) (.+)$/, async (ctx) => {
-  try {
-    // Проверка прав администратора
-    if (ctx.from.id.toString() !== ADMIN_ID.toString()) {
-      return;
-    }
-    
-    const clientId = ctx.match[1];
-    const message = ctx.match[2];
-    
-    await bot.telegram.sendMessage(
-      clientId,
-      `📬 *Сообщение от Анастасии*:\n\n${message}`,
-      { parse_mode: 'Markdown' }
-    );
-    
-    await ctx.reply('✅ Сообщение успешно отправлено клиенту.');
-    logWithTime(`Администратор отправил сообщение пользователю ${clientId}`);
-  } catch (error) {
-    console.error(`Ошибка при отправке сообщения клиенту: ${error.message}`);
-    await ctx.reply(`❌ Ошибка при отправке сообщения: ${error.message}`);
   }
 });
 
