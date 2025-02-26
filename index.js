@@ -508,10 +508,80 @@ process.once('SIGTERM', () => {
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Переменная для отслеживания времени запуска
+const startTime = new Date();
+
 // Простой роут для проверки работоспособности
 app.get('/', (req, res) => {
-  res.send('Bot is running!');
+  const uptime = Math.floor((new Date() - startTime) / 1000);
+  const uptimeFormatted = formatUptime(uptime);
+  
+  res.send(`
+    <html>
+      <head>
+        <title>Breathing Practice Bot</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .status { padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+          .online { background-color: #d4edda; color: #155724; }
+          h1 { color: #5682a3; }
+          .info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <h1>Breathing Practice Bot</h1>
+        <div class="status online">
+          <strong>Status:</strong> Bot is running!
+        </div>
+        <div class="info">
+          <p><strong>Uptime:</strong> ${uptimeFormatted}</p>
+          <p><strong>Started:</strong> ${startTime.toLocaleString()}</p>
+          <p><strong>Last ping:</strong> ${new Date().toLocaleString()}</p>
+        </div>
+      </body>
+    </html>
+  `);
+  logWithTime(`Запрос к главной странице (uptime: ${uptimeFormatted})`);
 });
+
+// Добавляем эндпоинт для пинга (чистый текст для быстрого ответа)
+app.get('/ping', (req, res) => {
+  res.set('Content-Type', 'text/plain');
+  res.send('pong');
+  logWithTime('Получен пинг-запрос');
+});
+
+// Добавляем маршрут для мониторинга статуса (JSON для автоматического мониторинга)
+app.get('/status', (req, res) => {
+  const status = {
+    status: 'ok',
+    uptime: Math.floor((new Date() - startTime) / 1000),
+    startTime: startTime.toISOString(),
+    currentTime: new Date().toISOString(),
+    memory: process.memoryUsage()
+  };
+  
+  res.json(status);
+  logWithTime('Запрос статуса бота');
+});
+
+// Форматирование времени работы
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / (3600 * 24));
+  seconds -= days * 3600 * 24;
+  const hours = Math.floor(seconds / 3600);
+  seconds -= hours * 3600;
+  const minutes = Math.floor(seconds / 60);
+  seconds -= minutes * 60;
+  
+  let result = '';
+  if (days > 0) result += `${days}d `;
+  if (hours > 0) result += `${hours}h `;
+  if (minutes > 0) result += `${minutes}m `;
+  result += `${seconds}s`;
+  
+  return result;
+}
 
 // Запускаем сервер
 app.listen(PORT, () => {
