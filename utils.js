@@ -13,7 +13,22 @@ function mainKeyboard() {
     ],
     [
       Markup.button.callback('📝 Мои покупки', 'show_purchases'),
+      Markup.button.callback('🎬 Мои консультации', 'show_consultations')
+    ],
+    [
       Markup.button.url('☎️ Связаться с преподавателем', 'https://t.me/NastuPopova')
+    ]
+  ]);
+}
+
+// Функция для создания клавиатуры раздела "Мои консультации"
+function consultationsKeyboard() {
+  return Markup.inlineKeyboard([
+    [
+      Markup.button.callback('🔄 Обновить список', 'refresh_consultations')
+    ],
+    [
+      Markup.button.callback('◀️ Вернуться в меню', 'back_to_menu')
     ]
   ]);
 }
@@ -70,11 +85,17 @@ const validators = {
   phone: (text) => {
     const phoneRegex = /^\+?[0-9]{10,15}$/;
     return phoneRegex.test(text.replace(/\s+/g, ''));
+  },
+  
+  url: (text) => {
+    const urlRegex = /^(http|https):\/\/[^ "]+$/;
+    return urlRegex.test(text);
   }
 };
 
 module.exports = {
   mainKeyboard,
+  consultationsKeyboard,
   removeKeyboard,
   sendMessageWithInlineKeyboard,
   fileExists,
