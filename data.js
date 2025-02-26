@@ -9,7 +9,7 @@ const products = {
     price: '990 ₽',
     description: 'Видеоурок (20 минут) с базовыми техниками + PDF-инструкция + бонусные материалы',
     pdfFile: 'files/starter-kit-guide.pdf',
-    videoLink: 'https://yourvideo.com/starter',
+    videoLink: 'https://rutube.ru/video/private/ee9b54060c99464e3b283beab77e9c68/?p=l2hPoyjux4Q8SHJnv7x4Sg',
     // Предподготовленные сообщения для ускорения
     productInfo: '<b>Стартовый комплект дыхательных практик</b>\n\nВидеоурок (20 минут) с базовыми техниками + PDF-инструкция + бонусные материалы\n\nЦена: <b>990 ₽</b>'
   },
