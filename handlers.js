@@ -57,28 +57,36 @@ async function handleBuyAction(ctx) {
       }
     };
 
-    try {
-      // Пытаемся отредактировать существующее сообщение
-      await ctx.editMessageText(messageContent, messageOptions);
-      await ctx.answerCbQuery('✅ Информация о продукте');
-    } catch (editError) {
-      // Если редактирование не удалось (например, сообщение уже отправлено)
-      if (editError.description === 'Bad Request: message is not modified') {
-        // Просто подтверждаем запрос, не делая ничего
+    // Отладочные логи
+    console.log('Тип контекста:', ctx.updateType);
+    console.log('Callback query:', ctx.callbackQuery);
+
+    if (ctx.updateType === 'callback_query') {
+      try {
+        await ctx.editMessageText(messageContent, messageOptions);
         await ctx.answerCbQuery('✅ Информация о продукте');
-      } else {
-        // Для других ошибок отправляем новое сообщение
-        await ctx.reply(messageContent, messageOptions);
-        await ctx.answerCbQuery('✅ Информация о продукте');
+      } catch (editError) {
+        console.error('Ошибка редактирования:', editError);
+
+        // Более детальная обработка ошибок
+        if (editError.description === 'Bad Request: message is not modified') {
+          await ctx.answerCbQuery('✅ Информация о продукте');
+        } else {
+          // Если редактирование не удалось, отправляем новое сообщение
+          await ctx.reply(messageContent, messageOptions);
+          await ctx.answerCbQuery('✅ Информация о продукте');
+        }
       }
+    } else {
+      // Для других типов контекста просто отправляем сообщение
+      await ctx.reply(messageContent, messageOptions);
     }
     
     logWithTime(`Пользователь ${ctx.from.id} просматривает продукт: ${product.name}`);
   } catch (error) {
-    console.error(`Ошибка при выборе продукта: ${error.message}`);
+    console.error(`Полная ошибка при выборе продукта:`, error);
     
     try {
-      // Пытаемся отправить сообщение об ошибке
       if (ctx.updateType === 'callback_query') {
         await ctx.answerCbQuery('Не удалось загрузить информацию');
       }
@@ -89,7 +97,6 @@ async function handleBuyAction(ctx) {
     }
   }
 }
-
 // Обработчик подтверждения начала покупки
 async function handleConfirmBuy(ctx) {
   try {
