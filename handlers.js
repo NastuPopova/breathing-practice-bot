@@ -47,18 +47,12 @@ async function handleBuyAction(ctx) {
     const product = products[productId];
     
     if (!product) {
-      await ctx.reply('❌ Продукт не найден. Пожалуйста, выберите из доступных вариантов.', {
-        reply_markup: {
-          ...mainKeyboard().reply_markup,
-          remove_keyboard: true
-        }
-      });
-      return await ctx.answerCbQuery();
+      await ctx.answerCbQuery('❌ Продукт не найден');
+      return;
     }
 
-    // Сначала показываем полное описание с кнопкой покупки
-    // Используем fullDescription если доступно, иначе используем productInfo
-    await ctx.reply(
+    // Редактируем существующее сообщение
+    await ctx.editMessageText(
       product.fullDescription || product.productInfo,
       { 
         parse_mode: 'HTML',
@@ -76,12 +70,6 @@ async function handleBuyAction(ctx) {
     logWithTime(`Пользователь ${userId} просматривает продукт: ${product.name}`);
   } catch (error) {
     console.error(`Ошибка при выборе продукта: ${error.message}`);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.', {
-      reply_markup: {
-        ...mainKeyboard().reply_markup,
-        remove_keyboard: true
-      }
-    });
     await ctx.answerCbQuery('Произошла ошибка');
   }
 }
@@ -94,19 +82,21 @@ async function handleConfirmBuy(ctx) {
     const product = products[productId];
     
     if (!product) {
-      await ctx.reply('❌ Продукт не найден. Пожалуйста, выберите из доступных вариантов.', {
-        reply_markup: {
-          ...mainKeyboard().reply_markup,
-          remove_keyboard: true
-        }
-      });
-      return await ctx.answerCbQuery();
+      await ctx.answerCbQuery('❌ Продукт не найден');
+      return;
     }
     
-    // Используем шаблонное сообщение
-    await ctx.reply(
+    // Редактируем существующее сообщение
+    await ctx.editMessageText(
       messageTemplates.emailRequest(product.name),
-      { parse_mode: 'Markdown' }
+      { 
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '◀️ Назад', callback_data: 'show_products' }]
+          ]
+        }
+      }
     );
     
     // Сохраняем информацию о выбранном продукте
@@ -116,18 +106,11 @@ async function handleConfirmBuy(ctx) {
       timestamp: new Date().toISOString()
     };
     
-    // Сразу уведомляем пользователя о обработке запроса для лучшего UX
     await ctx.answerCbQuery('✅ Начинаем оформление заказа');
     
     logWithTime(`Пользователь ${userId} начал оформление заказа: ${product.name}`);
   } catch (error) {
     console.error(`Ошибка при подтверждении покупки: ${error.message}`);
-    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.', {
-      reply_markup: {
-        ...mainKeyboard().reply_markup,
-        remove_keyboard: true
-      }
-    });
     await ctx.answerCbQuery('Произошла ошибка');
   }
 }
