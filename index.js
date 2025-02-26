@@ -9,7 +9,7 @@ const fs = require('fs');
 // Импортируем модули
 const { products, messageTemplates } = require('./data');
 const { mainKeyboard, consultationsKeyboard, removeKeyboard, sendMessageWithInlineKeyboard, fileExists, logWithTime } = require('./utils');
-const { handleStart, handleBuyAction, handleTextInput } = require('./handlers');
+const { handleStart, handleBuyAction, handleConfirmBuy, handleTextInput } = require('./handlers');
 const { notifyAdmin, confirmPayment, sendConsultationRecording } = require('./admin');
 const { setupPing } = require('./ping');
 const { setupScheduler } = require('./scheduler');
@@ -43,7 +43,7 @@ bot.action('show_products', async (ctx) => {
       '📚 Выберите продукт:',
       Markup.inlineKeyboard([
         [Markup.button.callback('🔰 Стартовый комплект - 990 ₽', 'buy_starter')],
-        [Markup.button.callback('👤 Индивидуальное занятие - 2000 ₽', 'buy_individual')],
+        [Markup.button.callback('👤 Индивидуальное занятие - 4 500 ₽', 'buy_individual')],
         [Markup.button.callback('🎯 Пакет 3 занятия - 4500 ₽', 'buy_package')],
         [Markup.button.callback('🏆 Полный курс видеоуроков - 14 999 ₽', 'buy_course')],
         [Markup.button.callback('◀️ Назад', 'back_to_menu')]
@@ -227,6 +227,8 @@ bot.action('refresh_consultations', async (ctx) => {
 // Обработка покупок
 bot.action(/buy_(.+)/, handleBuyAction);
 
+// Новый обработчик для подтверждения начала оформления заказа
+bot.action(/confirm_buy_(.+)/, handleConfirmBuy);
 // Обработка текстовых сообщений для email и телефона
 bot.on('text', async (ctx) => {
   try {
