@@ -4,6 +4,86 @@
 const { products, messageTemplates } = require('./data');
 const { mainKeyboard, logWithTime, validators } = require('./utils');
 
+// Обработчик команды start
+async function handleStart(ctx) {
+  try {
+    const userId = ctx.from.id;
+    const firstName = ctx.from.first_name || 'друг';
+    
+    // Удаляем клавиатуру и показываем меню с inline-кнопками
+    await ctx.reply(
+      `👋 Приветствую, ${firstName}!\n\nЯ бот Анастасии Поповой, инструктора по дыхательным практикам. Через меня вы можете приобрести курсы и получить материалы.\n\nВыберите действие:`,
+      {
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
+      }
+    );
+
+    // Уведомление администратору о новом пользователе, но только если это не сам админ
+    const { bot, ADMIN_ID } = global.botData;
+    
+    if (userId !== parseInt(ADMIN_ID)) {
+      // Отправляем уведомление админу асинхронно
+      bot.telegram.sendMessage(
+        ADMIN_ID,
+        `🆕 Новый пользователь:\n- Имя: ${firstName} ${ctx.from.last_name || ''}\n- Username: @${ctx.from.username || 'отсутствует'}\n- ID: ${userId}`
+      ).catch(e => console.error(`Ошибка при уведомлении админа: ${e.message}`));
+    }
+    
+    logWithTime(`Новый пользователь: ${userId}, ${ctx.from.username || 'без username'}`);
+  } catch (error) {
+    console.error(`Ошибка в обработчике /start: ${error.message}`);
+  }
+}
+
+// Обработчик выбора продукта
+async function handleBuyAction(ctx) {
+  try {
+    const productId = ctx.match[1];
+    const userId = ctx.from.id;
+    const product = products[productId];
+    
+    if (!product) {
+      await ctx.reply('❌ Продукт не найден. Пожалуйста, выберите из доступных вариантов.', {
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
+      });
+      return await ctx.answerCbQuery();
+    }
+
+    // Используем шаблонное сообщение
+    await ctx.reply(
+      messageTemplates.emailRequest(product.name),
+      { parse_mode: 'Markdown' }
+    );
+    
+    // Сохраняем информацию о выбранном продукте
+    global.botData.pendingOrders[userId] = {
+      productId,
+      status: 'waiting_email',
+      timestamp: new Date().toISOString()
+    };
+    
+    // Сразу уведомляем пользователя о обработке запроса для лучшего UX
+    await ctx.answerCbQuery('✅ Продукт выбран');
+    
+    logWithTime(`Пользователь ${userId} выбрал продукт: ${product.name}`);
+  } catch (error) {
+    console.error(`Ошибка при выборе продукта: ${error.message}`);
+    await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.', {
+      reply_markup: {
+        ...mainKeyboard().reply_markup,
+        remove_keyboard: true
+      }
+    });
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
+}
+
 // Обработчик текстовых сообщений (для получения email и телефона)
 async function handleTextInput(ctx) {
   try {
@@ -16,10 +96,15 @@ async function handleTextInput(ctx) {
       // Если получена команда /start, не реагируем - она обрабатывается отдельно
       if (text === '/start') return;
       
-      // Для любого другого текста показываем меню и подсказку
+      // Для любого другого текста показываем меню и подсказку, удаляем клавиатуру
       await ctx.reply(
         'Используйте кнопки меню ниже для навигации:',
-        mainKeyboard()
+        {
+          reply_markup: {
+            ...mainKeyboard().reply_markup,
+            remove_keyboard: true
+          }
+        }
       );
       return;
     }
@@ -55,12 +140,15 @@ async function handleTextInput(ctx) {
       
       const product = products[pendingOrders[userId].productId];
       
-      // Отправляем информацию о заказе
+      // Отправляем информацию о заказе с inline-кнопками и удаляем клавиатуру
       await ctx.reply(
         messageTemplates.orderReady(product.name, product.price),
         { 
           parse_mode: 'Markdown',
-          ...mainKeyboard() 
+          reply_markup: {
+            ...mainKeyboard().reply_markup,
+            remove_keyboard: true
+          }
         }
       );
       
@@ -72,10 +160,20 @@ async function handleTextInput(ctx) {
     }
   } catch (error) {
     console.error(`Ошибка при обработке текстового сообщения: ${error.message}`);
-    await ctx.reply(messageTemplates.errorMessage, mainKeyboard());
+    await ctx.reply(
+      messageTemplates.errorMessage, 
+      {
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
+      }
+    );
   }
 }
 
 module.exports = {
+  handleStart,
+  handleBuyAction,
   handleTextInput
 };
