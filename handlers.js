@@ -36,7 +36,6 @@ async function handleStart(ctx) {
   }
 }
 
-// Обработчик выбора продукта
 async function handleBuyAction(ctx) {
   try {
     const productId = ctx.match[1];
@@ -47,29 +46,43 @@ async function handleBuyAction(ctx) {
       return;
     }
 
-    await ctx.editMessageText(
-      product.fullDescription || product.productInfo,
-      { 
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [Markup.button.callback('💳 Оформить заказ', `confirm_buy_${productId}`)],
-            [Markup.button.callback('◀️ Назад к списку', 'show_products')]
-          ]
-        }
+    const messageContent = product.fullDescription || product.productInfo;
+    const messageOptions = { 
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [Markup.button.callback('💳 Оформить заказ', `confirm_buy_${productId}`)],
+          [Markup.button.callback('◀️ Назад к списку', 'show_products')]
+        ]
       }
-    );
-    
-    await ctx.answerCbQuery('✅ Информация о продукте');
+    };
+
+    // Проверяем тип контекста
+    if (ctx.updateType === 'callback_query') {
+      try {
+        // Пытаемся отредактировать существующее сообщение
+        await ctx.editMessageText(messageContent, messageOptions);
+        await ctx.answerCbQuery('✅ Информация о продукте');
+      } catch (editError) {
+        // Если редактирование не удалось, отправляем новое сообщение
+        await ctx.reply(messageContent, messageOptions);
+        await ctx.answerCbQuery('✅ Информация о продукте');
+      }
+    } else {
+      // Для других типов контекста просто отправляем сообщение
+      await ctx.reply(messageContent, messageOptions);
+    }
     
     logWithTime(`Пользователь ${ctx.from.id} просматривает продукт: ${product.name}`);
   } catch (error) {
     console.error(`Ошибка при выборе продукта: ${error.message}`);
     
     try {
-      await ctx.answerCbQuery('Не удалось загрузить информацию');
+      // Пытаемся отправить сообщение об ошибке
+      if (ctx.updateType === 'callback_query') {
+        await ctx.answerCbQuery('Не удалось загрузить информацию');
+      }
       
-      // Пытаемся отправить более подробное сообщение об ошибке
       await ctx.reply('❌ Возникла проблема при загрузке информации о продукте. Попробуйте позже.');
     } catch (secondaryError) {
       console.error('Дополнительная ошибка:', secondaryError);
