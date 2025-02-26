@@ -110,6 +110,43 @@ async function handleConfirmBuy(ctx) {
     
     logWithTime(`Пользователь ${userId} начал оформление заказа: ${product.name}`);
   } catch (error) {
+    console.error(`Полная ошибка при подтверждении покупки:`, error);
+    
+    try {
+      // Пытаемся отправить более подробное сообщение об ошибке
+      await ctx.reply(`❌ Произошла ошибка: ${error.message}`);
+    } catch (replyError) {
+      console.error('Не удалось отправить сообщение об ошибке:', replyError);
+    }
+    
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
+}
+    
+    // Редактируем существующее сообщение
+    await ctx.editMessageText(
+      messageTemplates.emailRequest(product.name),
+      { 
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '◀️ Назад', callback_data: 'show_products' }]
+          ]
+        }
+      }
+    );
+    
+    // Сохраняем информацию о выбранном продукте
+    global.botData.pendingOrders[userId] = {
+      productId,
+      status: 'waiting_email',
+      timestamp: new Date().toISOString()
+    };
+    
+    await ctx.answerCbQuery('✅ Начинаем оформление заказа');
+    
+    logWithTime(`Пользователь ${userId} начал оформление заказа: ${product.name}`);
+  } catch (error) {
     console.error(`Ошибка при подтверждении покупки: ${error.message}`);
     await ctx.answerCbQuery('Произошла ошибка');
   }
