@@ -11,7 +11,6 @@ async function handleStart(ctx) {
     const userId = ctx.from.id;
     const firstName = ctx.from.first_name || 'друг';
     
-    // Удаляем клавиатуру и показываем меню с inline-кнопками
     await ctx.reply(
       `👋 Приветствую, ${firstName}!\n\nЯ бот Анастасии Поповой, инструктора по дыхательным практикам. Через меня вы можете приобрести курсы и получить материалы.\n\nВыберите действие:`,
       {
@@ -22,11 +21,9 @@ async function handleStart(ctx) {
       }
     );
 
-    // Уведомление администратору о новом пользователе, но только если это не сам админ
     const { bot, ADMIN_ID } = global.botData;
     
     if (userId !== parseInt(ADMIN_ID)) {
-      // Отправляем уведомление админу асинхронно
       bot.telegram.sendMessage(
         ADMIN_ID,
         `🆕 Новый пользователь:\n- Имя: ${firstName} ${ctx.from.last_name || ''}\n- Username: @${ctx.from.username || 'отсутствует'}\n- ID: ${userId}`
@@ -43,7 +40,6 @@ async function handleStart(ctx) {
 async function handleBuyAction(ctx) {
   try {
     const productId = ctx.match[1];
-    const userId = ctx.from.id;
     const product = products[productId];
     
     if (!product) {
@@ -51,7 +47,6 @@ async function handleBuyAction(ctx) {
       return;
     }
 
-    // Редактируем существующее сообщение
     await ctx.editMessageText(
       product.fullDescription || product.productInfo,
       { 
@@ -65,12 +60,20 @@ async function handleBuyAction(ctx) {
       }
     );
     
-    await ctx.answerCbQuery('✅ Загружаю информацию о продукте');
+    await ctx.answerCbQuery('✅ Информация о продукте');
     
-    logWithTime(`Пользователь ${userId} просматривает продукт: ${product.name}`);
+    logWithTime(`Пользователь ${ctx.from.id} просматривает продукт: ${product.name}`);
   } catch (error) {
     console.error(`Ошибка при выборе продукта: ${error.message}`);
-    await ctx.answerCbQuery('Произошла ошибка');
+    
+    try {
+      await ctx.answerCbQuery('Не удалось загрузить информацию');
+      
+      // Пытаемся отправить более подробное сообщение об ошибке
+      await ctx.reply('❌ Возникла проблема при загрузке информации о продукте. Попробуйте позже.');
+    } catch (secondaryError) {
+      console.error('Дополнительная ошибка:', secondaryError);
+    }
   }
 }
 
@@ -86,7 +89,6 @@ async function handleConfirmBuy(ctx) {
       return;
     }
     
-    // Редактируем существующее сообщение
     await ctx.editMessageText(
       messageTemplates.emailRequest(product.name),
       { 
@@ -99,45 +101,14 @@ async function handleConfirmBuy(ctx) {
       }
     );
     
-    // Сохраняем информацию о выбранном продукте
+    // Очищаем предыдущие незавершенные заказы пользователя
+    Object.keys(global.botData.pendingOrders)
+      .filter(key => global.botData.pendingOrders[key].userId === userId)
+      .forEach(key => delete global.botData.pendingOrders[key]);
+    
+    // Сохраняем новый заказ
     global.botData.pendingOrders[userId] = {
-      productId,
-      status: 'waiting_email',
-      timestamp: new Date().toISOString()
-    };
-    
-    await ctx.answerCbQuery('✅ Начинаем оформление заказа');
-    
-    logWithTime(`Пользователь ${userId} начал оформление заказа: ${product.name}`);
-  } catch (error) {
-    console.error(`Полная ошибка при подтверждении покупки:`, error);
-    
-    try {
-      // Пытаемся отправить более подробное сообщение об ошибке
-      await ctx.reply(`❌ Произошла ошибка: ${error.message}`);
-    } catch (replyError) {
-      console.error('Не удалось отправить сообщение об ошибке:', replyError);
-    }
-    
-    await ctx.answerCbQuery('Произошла ошибка');
-  }
-}
-    
-    // Редактируем существующее сообщение
-    await ctx.editMessageText(
-      messageTemplates.emailRequest(product.name),
-      { 
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '◀️ Назад', callback_data: 'show_products' }]
-          ]
-        }
-      }
-    );
-    
-    // Сохраняем информацию о выбранном продукте
-    global.botData.pendingOrders[userId] = {
+      userId,
       productId,
       status: 'waiting_email',
       timestamp: new Date().toISOString()
@@ -148,7 +119,13 @@ async function handleConfirmBuy(ctx) {
     logWithTime(`Пользователь ${userId} начал оформление заказа: ${product.name}`);
   } catch (error) {
     console.error(`Ошибка при подтверждении покупки: ${error.message}`);
-    await ctx.answerCbQuery('Произошла ошибка');
+    
+    try {
+      await ctx.answerCbQuery('Произошла ошибка');
+      await ctx.reply('❌ Не удалось начать оформление заказа. Попробуйте еще раз.');
+    } catch (secondaryError) {
+      console.error('Дополнительная ошибка:', secondaryError);
+    }
   }
 }
 
@@ -159,12 +136,10 @@ async function handleTextInput(ctx) {
     const text = ctx.message.text;
     const { pendingOrders } = global.botData;
     
-    // Если нет ожидающего заказа, возможно, нам нужно показать главное меню
+    // Если нет ожидающего заказа, показываем главное меню
     if (!pendingOrders[userId]) {
-      // Если получена команда /start, не реагируем - она обрабатывается отдельно
       if (text === '/start') return;
       
-      // Для любого другого текста показываем меню и подсказку, удаляем клавиатуру
       await ctx.reply(
         'Используйте кнопки меню ниже для навигации:',
         {
@@ -179,36 +154,30 @@ async function handleTextInput(ctx) {
     
     // Обработка email
     if (pendingOrders[userId].status === 'waiting_email') {
-      // Проверка формата email
       if (!validators.email(text)) {
         return await ctx.reply(messageTemplates.emailInvalid);
       }
       
-      // Сохраняем email
       pendingOrders[userId].email = text;
       pendingOrders[userId].status = 'waiting_phone';
       
-      // Запрашиваем номер телефона
       await ctx.reply(messageTemplates.phoneRequest);
       
       logWithTime(`Пользователь ${userId} ввел email: ${text}`);
     } 
     // Обработка номера телефона
     else if (pendingOrders[userId].status === 'waiting_phone') {
-      // Проверка формата телефона
       const cleanedPhone = text.replace(/\s+/g, '');
       
       if (!validators.phone(cleanedPhone)) {
         return await ctx.reply(messageTemplates.phoneInvalid);
       }
       
-      // Сохраняем телефон и обновляем статус
       pendingOrders[userId].phone = cleanedPhone;
       pendingOrders[userId].status = 'waiting_payment';
       
       const product = products[pendingOrders[userId].productId];
       
-      // Отправляем информацию о заказе с inline-кнопками и удаляем клавиатуру
       await ctx.reply(
         messageTemplates.orderReady(product.name, product.price),
         { 
@@ -228,6 +197,7 @@ async function handleTextInput(ctx) {
     }
   } catch (error) {
     console.error(`Ошибка при обработке текстового сообщения: ${error.message}`);
+    
     await ctx.reply(
       messageTemplates.errorMessage, 
       {
