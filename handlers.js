@@ -74,7 +74,7 @@ async function handleBuyAction(ctx) {
     const description = product.fullDescription || product.productInfo;
     logWithTime(`[BUY] Подготовка к отправке описания продукта с кнопками`);
     
-    // Создаем callback data для кнопки оформления заказа
+    // Создаем callback data для кнопки оформления заказа - ИСПОЛЬЗУЕМ ТОЛЬКО confirm_simple_*
     const confirmCallbackData = `confirm_simple_${productId}`;
     logWithTime(`[BUY] Создан callback для кнопки оформления: ${confirmCallbackData}`);
     
@@ -118,7 +118,7 @@ async function handleBuyAction(ctx) {
   }
 }
 
-// Обработчик подтверждения начала покупки
+// Обработчик подтверждения начала покупки (СОХРАНЯЕМ ДЛЯ СОВМЕСТИМОСТИ)
 async function handleConfirmBuy(ctx) {
   try {
     console.log('[CONFIRM_BUY] ====== НАЧАЛО ОБРАБОТКИ ПОДТВЕРЖДЕНИЯ ПОКУПКИ ======');
