@@ -106,6 +106,127 @@ bot.action('back_to_menu', async (ctx) => {
   }
 });
 
+// Обработка покупок
+bot.action(/buy_(.+)/, handleBuyAction);
+
+// Обработчик для простой кнопки оформления заказа
+bot.action(/confirm_simple_(.+)/, async (ctx) => {
+  console.log('========== УПРОЩЕННЫЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
+  const productId = ctx.match[1];
+  const userId = ctx.from.id;
+  console.log(`Пользователь ${userId} нажал на простую кнопку для продукта ${productId}`);
+  
+  try {
+    // Получаем выбранный продукт
+    const product = products[productId];
+    
+    if (!product) {
+      console.error(`Продукт с ID ${productId} не найден`);
+      await ctx.answerCbQuery('Продукт не найден');
+      return false;
+    }
+    
+    // Отправляем запрос на email
+    await ctx.reply(
+      messageTemplates.emailRequest(product.name),
+      { parse_mode: 'Markdown' }
+    );
+    
+    // Сохраняем информацию о выбранном продукте
+    global.botData.pendingOrders[userId] = {
+      productId: productId,
+      status: 'waiting_email',
+      timestamp: new Date().toISOString(),
+      simpleHandler: true
+    };
+    
+    await ctx.answerCbQuery('✅ Начинаем оформление заказа');
+    console.log(`Пользователь ${userId} начал оформление через простую кнопку для продукта ${productId}`);
+    logWithTime(`[CONFIRM_SIMPLE] Начато оформление заказа для пользователя ${userId}, продукт: ${product.name}`);
+    return true;
+  } catch (error) {
+    console.error(`Ошибка в простом обработчике: ${error.message}`);
+    console.error(`Stack trace: ${error.stack}`);
+    await ctx.answerCbQuery('Произошла ошибка');
+    return false;
+  }
+});
+
+// ЗАМЕНА: Вместо регулярного выражения используем прямые обработчики
+// Закомментируйте или удалите эту строку:
+// bot.action(/confirm_buy_(.+)/, handleConfirmBuy);
+
+/*
+// Эти обработчики можно закомментировать или удалить, так как они заменены новым универсальным обработчиком
+bot.action('confirm_simple', (ctx) => {
+  console.log('========== УПРОЩЕННЫЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
+  const userId = ctx.from.id;
+  console.log(`Пользователь ${userId} нажал на простую кнопку`);
+  
+  try {
+    // Используем стартовый комплект по умолчанию
+    const product = products['starter'];
+    
+    // Отправляем запрос на email
+    ctx.reply(
+      messageTemplates.emailRequest(product.name),
+      { parse_mode: 'Markdown' }
+    );
+    
+    // Сохраняем информацию о выбранном продукте
+    global.botData.pendingOrders[userId] = {
+      productId: 'starter',
+      status: 'waiting_email',
+      timestamp: new Date().toISOString(),
+      simpleHandler: true
+    };
+    
+    ctx.answerCbQuery('✅ Начинаем оформление заказа (простая кнопка)');
+    console.log(`Пользователь ${userId} начал оформление через простую кнопку`);
+    return true;
+  } catch (error) {
+    console.error(`Ошибка в простом обработчике: ${error.message}`);
+    console.error(`Stack trace: ${error.stack}`);
+    ctx.answerCbQuery('Произошла ошибка');
+    return false;
+  }
+});
+
+// Прямой обработчик для кнопки "Прямая кнопка (starter)"
+bot.action('confirm_buy_starter_direct', (ctx) => {
+  console.log('========== ПРЯМОЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
+  const userId = ctx.from.id;
+  console.log(`Пользователь ${userId} нажал на прямую кнопку starter`);
+  
+  try {
+    const product = products['starter'];
+    
+    // Отправляем запрос на email
+    ctx.reply(
+      messageTemplates.emailRequest(product.name),
+      { parse_mode: 'Markdown' }
+    );
+    
+    // Сохраняем информацию о выбранном продукте
+    global.botData.pendingOrders[userId] = {
+      productId: 'starter',
+      status: 'waiting_email',
+      timestamp: new Date().toISOString(),
+      directHandler: true
+    };
+    
+    ctx.answerCbQuery('✅ Начинаем оформление заказа (прямая кнопка)');
+    console.log(`Пользователь ${userId} начал оформление через прямую кнопку`);
+    return true;
+  } catch (error) {
+    console.error(`Ошибка в прямом обработчике: ${error.message}`);
+    console.error(`Stack trace: ${error.stack}`);
+    ctx.answerCbQuery('Произошла ошибка');
+    return false;
+  }
+});
+*/
+
 bot.action('show_info', async (ctx) => {
   try {
     await ctx.reply(
