@@ -40,6 +40,13 @@ bot.on('callback_query', (ctx, next) => {
   console.log('From user:', ctx.from.id);
   console.log('Message ID:', ctx.callbackQuery.message.message_id);
   console.log('===============================================');
+
+  // Добавьте в начало файла index.js после регистрации глобальных данных
+console.log('Зарегистрированные обработчики для бота:');
+console.log('- bot.action(/buy_(.+)/, handleBuyAction)');
+console.log('- bot.action(/confirm_buy_(.+)/, handleConfirmBuy)');
+console.log('- bot.action(\'confirm_simple\', ...)');
+console.log('- bot.action(\'confirm_buy_starter\', ...)');
   
   // Продолжаем выполнение цепочки обработчиков
   return next();
