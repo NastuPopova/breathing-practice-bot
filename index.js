@@ -33,6 +33,17 @@ global.botData = {
   adminState: null // Для хранения состояния админа
 };
 
+// Логирование всех callback запросов
+bot.on('callback_query', (ctx, next) => {
+  console.log('=========== CALLBACK QUERY RECEIVED ===========');
+  console.log('Data:', ctx.callbackQuery.data);
+  console.log('From user:', ctx.from.id);
+  console.log('Message ID:', ctx.callbackQuery.message.message_id);
+  console.log('===============================================');
+  
+  // Продолжаем выполнение цепочки обработчиков
+  return next();
+});
 // Обработчики команд
 bot.start(handleStart);
 
