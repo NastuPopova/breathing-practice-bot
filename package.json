@@ -1,18 +1,11 @@
 {
-
-"scripts": {
-  "start": "DEBUG=telegraf:* node index.js",
-  "dev": "DEBUG=telegraf:* nodemon index.js",
-
-}
-  
   "name": "breathing-practice-bot",
   "version": "1.0.0",
   "description": "Telegram bot for breathing practices",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "DEBUG=telegraf:* node index.js",
+    "dev": "DEBUG=telegraf:* nodemon index.js",
     "ping": "node -e \"require('./ping').setupPing(process.env.APP_URL || 'http://localhost:3000', 5)\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
