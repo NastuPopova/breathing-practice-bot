@@ -78,6 +78,19 @@ async function confirmPayment(clientId) {
     const orderId = Date.now().toString().slice(-6); // Последние 6 цифр timestamp как ID заказа
     const orderDate = new Date().toLocaleDateString();
     
+    // Отправляем логотип с поздравлением
+    await bot.telegram.sendPhoto(
+      clientId,
+      { source: 'files/logo.jpg' },
+      { 
+        caption: '🎉 Поздравляем! Ваша оплата подтверждена!',
+        parse_mode: 'Markdown'
+      }
+    );
+    
+    // Небольшая задержка для лучшего UX
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
     // Формируем сообщение в зависимости от типа продукта
     let confirmationMessage;
     
@@ -272,6 +285,19 @@ async function sendConsultationRecording(clientId, recordingLink, notes = '') {
     const latestOrder = consultationOrders.sort((a, b) => 
       new Date(b.completedAt) - new Date(a.completedAt)
     )[0];
+    
+    // Отправляем логотип
+    await bot.telegram.sendPhoto(
+      clientId,
+      { source: 'files/logo.jpg' },
+      { 
+        caption: '🎥 Запись вашей консультации готова!',
+        parse_mode: 'Markdown'
+      }
+    );
+    
+    // Задержка
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     // Формируем сообщение с записью консультации
     const message = `
