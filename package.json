@@ -1,4 +1,11 @@
 {
+
+"scripts": {
+  "start": "DEBUG=telegraf:* node index.js",
+  "dev": "DEBUG=telegraf:* nodemon index.js",
+  // остальные скрипты...
+}
+  
   "name": "breathing-practice-bot",
   "version": "1.0.0",
   "description": "Telegram bot for breathing practices",
