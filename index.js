@@ -106,10 +106,10 @@ bot.action('back_to_menu', async (ctx) => {
   }
 });
 
-// Обработка покупок
+// Обработка покупок - ТОЛЬКО ОДИН обработчик для выбора продуктов
 bot.action(/buy_(.+)/, handleBuyAction);
 
-// Обработчик для простой кнопки оформления заказа
+// Обработчик для простой кнопки оформления заказа - универсальный для всех продуктов
 bot.action(/confirm_simple_(.+)/, async (ctx) => {
   console.log('========== УПРОЩЕННЫЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
   const productId = ctx.match[1];
@@ -151,81 +151,6 @@ bot.action(/confirm_simple_(.+)/, async (ctx) => {
     return false;
   }
 });
-
-// ЗАМЕНА: Вместо регулярного выражения используем прямые обработчики
-// Закомментируйте или удалите эту строку:
-// bot.action(/confirm_buy_(.+)/, handleConfirmBuy);
-
-/*
-// Эти обработчики можно закомментировать или удалить, так как они заменены новым универсальным обработчиком
-bot.action('confirm_simple', (ctx) => {
-  console.log('========== УПРОЩЕННЫЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
-  const userId = ctx.from.id;
-  console.log(`Пользователь ${userId} нажал на простую кнопку`);
-  
-  try {
-    // Используем стартовый комплект по умолчанию
-    const product = products['starter'];
-    
-    // Отправляем запрос на email
-    ctx.reply(
-      messageTemplates.emailRequest(product.name),
-      { parse_mode: 'Markdown' }
-    );
-    
-    // Сохраняем информацию о выбранном продукте
-    global.botData.pendingOrders[userId] = {
-      productId: 'starter',
-      status: 'waiting_email',
-      timestamp: new Date().toISOString(),
-      simpleHandler: true
-    };
-    
-    ctx.answerCbQuery('✅ Начинаем оформление заказа (простая кнопка)');
-    console.log(`Пользователь ${userId} начал оформление через простую кнопку`);
-    return true;
-  } catch (error) {
-    console.error(`Ошибка в простом обработчике: ${error.message}`);
-    console.error(`Stack trace: ${error.stack}`);
-    ctx.answerCbQuery('Произошла ошибка');
-    return false;
-  }
-});
-
-// Прямой обработчик для кнопки "Прямая кнопка (starter)"
-bot.action('confirm_buy_starter_direct', (ctx) => {
-  console.log('========== ПРЯМОЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
-  const userId = ctx.from.id;
-  console.log(`Пользователь ${userId} нажал на прямую кнопку starter`);
-  
-  try {
-    const product = products['starter'];
-    
-    // Отправляем запрос на email
-    ctx.reply(
-      messageTemplates.emailRequest(product.name),
-      { parse_mode: 'Markdown' }
-    );
-    
-    // Сохраняем информацию о выбранном продукте
-    global.botData.pendingOrders[userId] = {
-      productId: 'starter',
-      status: 'waiting_email',
-      timestamp: new Date().toISOString(),
-      directHandler: true
-    };
-    
-    ctx.answerCbQuery('✅ Начинаем оформление заказа (прямая кнопка)');
-    console.log(`Пользователь ${userId} начал оформление через прямую кнопку`);
-    return true;
-  } catch (error) {
-    console.error(`Ошибка в прямом обработчике: ${error.message}`);
-    console.error(`Stack trace: ${error.stack}`);
-    ctx.answerCbQuery('Произошла ошибка');
-    return false;
-  }
-});
-*/
 
 bot.action('show_info', async (ctx) => {
   try {
@@ -377,102 +302,6 @@ bot.action('refresh_consultations', async (ctx) => {
   } catch (error) {
     console.error(`Ошибка при обновлении консультаций: ${error.message}`);
     await ctx.answerCbQuery('Произошла ошибка при обновлении');
-  }
-});
-
-// Обработка покупок
-bot.action(/buy_(.+)/, handleBuyAction);
-
-// ЗАМЕНА: Вместо регулярного выражения используем прямые обработчики
-// Закомментируйте или удалите эту строку:
-// bot.action(/confirm_buy_(.+)/, handleConfirmBuy);
-
-// Обработчики для конкретных кнопок "Оформить заказ"
-bot.action('confirm_buy_starter', (ctx) => {
-  console.log('ПРЯМОЙ ОБРАБОТЧИК ДЛЯ confirm_buy_starter ВЫЗВАН');
-  // Имитируем match как будто использовалось регулярное выражение
-  ctx.match = ['confirm_buy_starter', 'starter'];
-  return handleConfirmBuy(ctx);
-});
-
-bot.action('confirm_buy_individual', (ctx) => {
-  console.log('ПРЯМОЙ ОБРАБОТЧИК ДЛЯ confirm_buy_individual ВЫЗВАН');
-  ctx.match = ['confirm_buy_individual', 'individual'];
-  return handleConfirmBuy(ctx);
-});
-
-bot.action('confirm_buy_package', (ctx) => {
-  console.log('ПРЯМОЙ ОБРАБОТЧИК ДЛЯ confirm_buy_package ВЫЗВАН');
-  ctx.match = ['confirm_buy_package', 'package'];
-  return handleConfirmBuy(ctx);
-});
-
-// Отладочные обработчики
-bot.action('confirm_simple', (ctx) => {
-  console.log('========== УПРОЩЕННЫЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
-  const userId = ctx.from.id;
-  console.log(`Пользователь ${userId} нажал на простую кнопку`);
-  
-  try {
-    // Используем стартовый комплект по умолчанию
-    const product = products['starter'];
-    
-    // Отправляем запрос на email
-    ctx.reply(
-      messageTemplates.emailRequest(product.name),
-      { parse_mode: 'Markdown' }
-    );
-    
-    // Сохраняем информацию о выбранном продукте
-    global.botData.pendingOrders[userId] = {
-      productId: 'starter',
-      status: 'waiting_email',
-      timestamp: new Date().toISOString(),
-      simpleHandler: true
-    };
-    
-    ctx.answerCbQuery('✅ Начинаем оформление заказа (простая кнопка)');
-    console.log(`Пользователь ${userId} начал оформление через простую кнопку`);
-    return true;
-  } catch (error) {
-    console.error(`Ошибка в простом обработчике: ${error.message}`);
-    console.error(`Stack trace: ${error.stack}`);
-    ctx.answerCbQuery('Произошла ошибка');
-    return false;
-  }
-});
-
-// Прямой обработчик для кнопки "Прямая кнопка (starter)"
-bot.action('confirm_buy_starter_direct', (ctx) => {
-  console.log('========== ПРЯМОЙ ОБРАБОТЧИК ЗАПУЩЕН ==========');
-  const userId = ctx.from.id;
-  console.log(`Пользователь ${userId} нажал на прямую кнопку starter`);
-  
-  try {
-    const product = products['starter'];
-    
-    // Отправляем запрос на email
-    ctx.reply(
-      messageTemplates.emailRequest(product.name),
-      { parse_mode: 'Markdown' }
-    );
-    
-    // Сохраняем информацию о выбранном продукте
-    global.botData.pendingOrders[userId] = {
-      productId: 'starter',
-      status: 'waiting_email',
-      timestamp: new Date().toISOString(),
-      directHandler: true
-    };
-    
-    ctx.answerCbQuery('✅ Начинаем оформление заказа (прямая кнопка)');
-    console.log(`Пользователь ${userId} начал оформление через прямую кнопку`);
-    return true;
-  } catch (error) {
-    console.error(`Ошибка в прямом обработчике: ${error.message}`);
-    console.error(`Stack trace: ${error.stack}`);
-    ctx.answerCbQuery('Произошла ошибка');
-    return false;
   }
 });
 
