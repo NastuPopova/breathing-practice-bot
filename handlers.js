@@ -75,31 +75,16 @@ async function handleBuyAction(ctx) {
     logWithTime(`[BUY] Подготовка к отправке описания продукта с кнопками`);
     
     // Создаем callback data для кнопки оформления заказа
-    const confirmCallbackData = `confirm_buy_${productId}`;
+    const confirmCallbackData = `confirm_simple_${productId}`;
     logWithTime(`[BUY] Создан callback для кнопки оформления: ${confirmCallbackData}`);
     
-    // Создаем разные варианты кнопок для отладки
-    let inlineKeyboard;
+    // Создаем стандартную клавиатуру с "простой" кнопкой для всех продуктов
+    const inlineKeyboard = Markup.inlineKeyboard([
+      [Markup.button.callback('💳 Оформить заказ', confirmCallbackData)],
+      [Markup.button.callback('◀️ Назад к списку', 'show_products')]
+    ]);
     
-    // Для стартового комплекта создаем расширенный набор кнопок для отладки
-    if (productId === 'starter') {
-      inlineKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('💳 Оформить заказ', confirmCallbackData)],
-        [Markup.button.callback('💳 Простая кнопка', 'confirm_simple')],
-        [Markup.button.callback('💳 Прямая кнопка (starter)', 'confirm_buy_starter')],
-        [Markup.button.callback('◀️ Назад к списку', 'show_products')]
-      ]);
-      logWithTime(`[BUY] Создана расширенная клавиатура с отладочными кнопками`);
-    } else {
-      // Для других продуктов используем стандартную клавиатуру
-      inlineKeyboard = Markup.inlineKeyboard([
-        [Markup.button.callback('💳 Оформить заказ', confirmCallbackData)],
-        [Markup.button.callback('◀️ Назад к списку', 'show_products')]
-      ]);
-      logWithTime(`[BUY] Создана стандартная клавиатура`);
-    }
-    
-    logWithTime(`[BUY] Отправка описания продукта пользователю ${userId}`);
+    logWithTime(`[BUY] Создана стандартная клавиатура с простой кнопкой`);
     console.log(`[BUY] Подготовленная клавиатура:`, JSON.stringify(inlineKeyboard.reply_markup, null, 2));
     
     // Отправляем сообщение с описанием и кнопками
