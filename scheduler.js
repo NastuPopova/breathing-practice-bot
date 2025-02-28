@@ -13,25 +13,60 @@ function setupScheduler(bot, adminId) {
   const counters = {
     pingCount: 0,
     telegramApiCalls: 0,
-    lastActivity: new Date()
+    lastActivity: new Date(),
+    consecutiveApiErrors: 0
   };
   
-  // 1. Проверка API Telegram каждые 30 минут
-  setInterval(() => {
-    logWithTime('Проверка соединения с API Telegram');
-    
-    bot.telegram.getMe()
-      .then(botInfo => {
-        counters.telegramApiCalls++;
-        logWithTime(`✅ Соединение с Telegram API активно (бот: ${botInfo.username})`);
-      })
-      .catch(error => {
-        logWithTime(`❌ Ошибка соединения с Telegram API: ${error.message}`);
-      });
-  }, 30 * 60 * 1000);
+  // Функция проверки соединения с Telegram API
+  const checkConnection = () => {
+    return new Promise((resolve, reject) => {
+      bot.telegram.getMe()
+        .then(botInfo => {
+          counters.telegramApiCalls++;
+          counters.consecutiveApiErrors = 0;
+          logWithTime(`✅ Соединение с Telegram API активно (бот: ${botInfo.username})`);
+          resolve(true);
+        })
+        .catch(error => {
+          counters.consecutiveApiErrors++;
+          logWithTime(`❌ Ошибка соединения с Telegram API: ${error.message}`);
+          reject(error);
+        });
+    });
+  };
   
-  // 2. Каждые 4 часа отправлять админу статус бота (только в рабочее время)
-  setInterval(() => {
+  // 1. Периодическая проверка API Telegram с механизмом восстановления
+  const connectionCheckInterval = setInterval(async () => {
+    try {
+      await checkConnection();
+      
+      // Если подряд более 3 ошибок - попытка перезапуска
+      if (counters.consecutiveApiErrors >= 3) {
+        logWithTime('КРИТИЧЕСКАЯ ОШИБКА: Множественные сбои соединения с Telegram API');
+        
+        try {
+          // Попытка остановки и перезапуска бота
+          bot.stop('connection_error');
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          bot.launch();
+          
+          // Уведомление администратора
+          bot.telegram.sendMessage(
+            adminId, 
+            '❗️ Обнаружена проблема с подключением к Telegram API. Выполнена попытка перезапуска бота.'
+          );
+        } catch (restartError) {
+          logWithTime(`Критическая ошибка при перезапуске: ${restartError.message}`);
+        }
+      }
+    } catch (error) {
+      // Обработка ошибок соединения
+      logWithTime(`Ошибка проверки соединения: ${error.message}`);
+    }
+  }, 15 * 60 * 1000); // Каждые 15 минут
+  
+  // 2. Статистика работы бота каждые 4 часа
+  const statusReportInterval = setInterval(() => {
     const now = new Date();
     const hours = now.getHours();
     
@@ -61,7 +96,7 @@ function setupScheduler(bot, adminId) {
   }, 4 * 60 * 60 * 1000);
   
   // 3. Искусственная активность бота каждые 10 минут
-  setInterval(() => {
+  const artificialActivityInterval = setInterval(() => {
     counters.pingCount++;
     counters.lastActivity = new Date();
     logWithTime(`Искусственная активность бота (#${counters.pingCount})`);
@@ -71,6 +106,14 @@ function setupScheduler(bot, adminId) {
   bot.use((ctx, next) => {
     counters.lastActivity = new Date();
     return next();
+  });
+  
+  // Обработка завершения процесса
+  process.on('SIGINT', () => {
+    clearInterval(connectionCheckInterval);
+    clearInterval(statusReportInterval);
+    clearInterval(artificialActivityInterval);
+    logWithTime('Интервалы планировщика остановлены');
   });
   
   logWithTime('Планировщик задач успешно настроен');
