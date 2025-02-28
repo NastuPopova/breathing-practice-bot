@@ -9,6 +9,44 @@ const { Markup } = require('telegraf');
 async function handleStart(ctx) {
   try {
     const userId = ctx.from.id;
+    // Файл: handlers.js
+// Обработчики основных сообщений пользователя
+
+const { products, messageTemplates } = require('./data');
+const { mainKeyboard, logWithTime, validators } = require('./utils');
+const { Markup } = require('telegraf');
+
+// Добавьте эту строку - карта для отслеживания времени последних команд пользователей
+const userLastCommand = new Map();
+
+// Обработчик команды start
+async function handleStart(ctx) {
+  try {
+    const userId = ctx.from.id;
+    const firstName = ctx.from.first_name || 'друг';
+    
+    // Добавьте этот блок кода для дебаунсинга
+    const currentTime = Date.now();
+    if (userLastCommand.has(userId)) {
+      const timeDiff = currentTime - userLastCommand.get(userId);
+      if (timeDiff < 5000) { // 5000 мс = 5 секунд
+        logWithTime(`[START] Игнорирую повторную команду start от ${userId} (прошло ${timeDiff} мс)`);
+        return;
+      }
+    }
+    
+    // Сохраняем время команды
+    userLastCommand.set(userId, currentTime);
+    
+    // Существующий код продолжается ниже
+    logWithTime(`[START] Обработка команды start от пользователя ${userId} (${firstName})`);
+    
+    // Сначала отправляем логотип
+    await ctx.replyWithPhoto(
+      { source: 'files/logo.jpg' }, // Путь к вашему изображению
+      { caption: '🌬️ Дыхательные практики Анастасии Поповой' }
+    );
+    
     const firstName = ctx.from.first_name || 'друг';
     
     logWithTime(`[START] Обработка команды start от пользователя ${userId} (${firstName})`);
