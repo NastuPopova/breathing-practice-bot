@@ -5,18 +5,7 @@ const { products, messageTemplates } = require('./data');
 const { mainKeyboard, logWithTime, validators } = require('./utils');
 const { Markup } = require('telegraf');
 
-// Обработчик команды start
-async function handleStart(ctx) {
-  try {
-    const userId = ctx.from.id;
-    // Файл: handlers.js
-// Обработчики основных сообщений пользователя
-
-const { products, messageTemplates } = require('./data');
-const { mainKeyboard, logWithTime, validators } = require('./utils');
-const { Markup } = require('telegraf');
-
-// Добавьте эту строку - карта для отслеживания времени последних команд пользователей
+// Карта для отслеживания времени последних команд пользователей
 const userLastCommand = new Map();
 
 // Обработчик команды start
@@ -25,7 +14,7 @@ async function handleStart(ctx) {
     const userId = ctx.from.id;
     const firstName = ctx.from.first_name || 'друг';
     
-    // Добавьте этот блок кода для дебаунсинга
+    // Добавляем дебаунсинг для предотвращения множественных вызовов
     const currentTime = Date.now();
     if (userLastCommand.has(userId)) {
       const timeDiff = currentTime - userLastCommand.get(userId);
@@ -38,31 +27,21 @@ async function handleStart(ctx) {
     // Сохраняем время команды
     userLastCommand.set(userId, currentTime);
     
-    // Существующий код продолжается ниже
     logWithTime(`[START] Обработка команды start от пользователя ${userId} (${firstName})`);
     
-    // Сначала отправляем логотип
-    await ctx.replyWithPhoto(
-      { source: 'files/logo.jpg' }, // Путь к вашему изображению
-      { caption: '🌬️ Дыхательные практики Анастасии Поповой' }
-    );
-    
-    const firstName = ctx.from.first_name || 'друг';
-    
-    logWithTime(`[START] Обработка команды start от пользователя ${userId} (${firstName})`);
-    
-    // Сначала отправляем логотип
-    await ctx.replyWithPhoto(
-      { source: 'files/logo.jpg' }, // Путь к вашему изображению
-      { caption: '🌬️ Дыхательные практики Анастасии Поповой' }
-    );
-    
-    // Небольшая задержка для лучшего UX
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Удаляем клавиатуру и показываем меню с inline-кнопками
-    await ctx.reply(
-      `🌬️ *Добро пожаловать, ${firstName}!* 🌬️
+    try {
+      // Отправляем логотип ОДИН РАЗ
+      await ctx.replyWithPhoto(
+        { source: 'files/logo.jpg' },
+        { caption: '🌬️ Дыхательные практики Анастасии Поповой' }
+      );
+      
+      // Небольшая задержка для лучшего UX
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Удаляем клавиатуру и показываем меню с inline-кнопками
+      await ctx.reply(
+        `🌬️ *Добро пожаловать, ${firstName}!* 🌬️
 
 Через этого бота вы можете:
 • Приобрести курсы дыхательных практик
@@ -76,15 +55,30 @@ async function handleStart(ctx) {
 ✅ Укрепить здоровье
 
 Выберите действие в меню ниже:`,
-      {
-        parse_mode: 'Markdown',
-        reply_markup: {
-          ...mainKeyboard().reply_markup,
-          remove_keyboard: true
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            ...mainKeyboard().reply_markup,
+            remove_keyboard: true
+          }
         }
-      }
-    );
-    logWithTime(`[START] Отправлено приветственное сообщение пользователю ${userId}`);
+      );
+      
+      logWithTime(`[START] Отправлено приветственное сообщение пользователю ${userId}`);
+    } catch (fileError) {
+      console.error(`[ERROR] Ошибка при отправке логотипа: ${fileError.message}`);
+      // Если не удалось отправить фото, все равно отправляем текстовое сообщение
+      await ctx.reply(
+        `🌬️ *Добро пожаловать, ${firstName}!* 🌬️\n\nВыберите действие в меню ниже:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            ...mainKeyboard().reply_markup,
+            remove_keyboard: true
+          }
+        }
+      );
+    }
 
     // Уведомление администратору о новом пользователе, но только если это не сам админ
     const { bot, ADMIN_ID } = global.botData;
@@ -103,6 +97,15 @@ async function handleStart(ctx) {
   } catch (error) {
     console.error(`[ERROR] Ошибка в обработчике /start: ${error.message}`);
     console.error(`[ERROR] Stack trace: ${error.stack}`);
+    
+    // Пытаемся отправить более простое сообщение при ошибке
+    try {
+      await ctx.reply('Привет! Выберите действие в меню:',
+        { reply_markup: mainKeyboard().reply_markup }
+      );
+    } catch (finalError) {
+      console.error(`[CRITICAL] Невозможно отправить сообщение: ${finalError.message}`);
+    }
   }
 }
 
@@ -113,7 +116,6 @@ async function handleBuyAction(ctx) {
     const userId = ctx.from.id;
     
     logWithTime(`[BUY] Пользователь ${userId} выбрал продукт с ID: ${productId}`);
-    console.log(`[BUY] Полный match объект:`, JSON.stringify(ctx.match, null, 2));
     
     const product = products[productId];
     
@@ -130,11 +132,16 @@ async function handleBuyAction(ctx) {
 
     logWithTime(`[BUY] Найден продукт: ${product.name}`);
     
-    // Сначала отправляем логотип с названием продукта
-    await ctx.replyWithPhoto(
-      { source: 'files/logo.jpg' },
-      { caption: `🌬️ ${product.name}` }
-    );
+    try {
+      // Пытаемся отправить логотип с названием продукта
+      await ctx.replyWithPhoto(
+        { source: 'files/logo.jpg' },
+        { caption: `🌬️ ${product.name}` }
+      );
+    } catch (photoError) {
+      console.error(`[ERROR] Не удалось отправить логотип: ${photoError.message}`);
+      // Продолжаем выполнение даже если не удалось отправить фото
+    }
     
     // Небольшая задержка для лучшего UX
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -143,18 +150,14 @@ async function handleBuyAction(ctx) {
     const description = product.fullDescription || product.productInfo;
     logWithTime(`[BUY] Подготовка к отправке описания продукта с кнопками`);
     
-    // Создаем callback data для кнопки оформления заказа - ИСПОЛЬЗУЕМ ТОЛЬКО confirm_simple_*
+    // Создаем callback data для кнопки оформления заказа
     const confirmCallbackData = `confirm_simple_${productId}`;
-    logWithTime(`[BUY] Создан callback для кнопки оформления: ${confirmCallbackData}`);
     
-    // Создаем стандартную клавиатуру с "простой" кнопкой для всех продуктов
+    // Создаем стандартную клавиатуру с кнопкой для всех продуктов
     const inlineKeyboard = Markup.inlineKeyboard([
       [Markup.button.callback('💳 Оформить заказ', confirmCallbackData)],
       [Markup.button.callback('◀️ Назад к списку', 'show_products')]
     ]);
-    
-    logWithTime(`[BUY] Создана стандартная клавиатура с простой кнопкой`);
-    console.log(`[BUY] Подготовленная клавиатура:`, JSON.stringify(inlineKeyboard.reply_markup, null, 2));
     
     // Отправляем сообщение с описанием и кнопками
     await ctx.reply(
@@ -187,17 +190,15 @@ async function handleBuyAction(ctx) {
   }
 }
 
-// Обработчик подтверждения начала покупки (СОХРАНЯЕМ ДЛЯ СОВМЕСТИМОСТИ)
+// Обработчик подтверждения начала покупки (устаревший, сохранен для совместимости)
 async function handleConfirmBuy(ctx) {
   try {
     console.log('[CONFIRM_BUY] ====== НАЧАЛО ОБРАБОТКИ ПОДТВЕРЖДЕНИЯ ПОКУПКИ ======');
-    console.log('[CONFIRM_BUY] Полный контекст callback_query:', JSON.stringify(ctx.callbackQuery, null, 2));
     
     const productId = ctx.match[1];
     const userId = ctx.from.id;
     
     logWithTime(`[CONFIRM_BUY] Пользователь ${userId} подтвердил покупку продукта с ID: ${productId}`);
-    console.log(`[CONFIRM_BUY] Полный match объект:`, JSON.stringify(ctx.match, null, 2));
     
     const product = products[productId];
     
@@ -216,7 +217,6 @@ async function handleConfirmBuy(ctx) {
     
     // Подготавливаем шаблонное сообщение для запроса email
     const emailRequestMessage = messageTemplates.emailRequest(product.name);
-    logWithTime(`[CONFIRM_BUY] Подготовлено сообщение запроса email: ${emailRequestMessage}`);
     
     // Отправляем запрос email
     await ctx.reply(
@@ -234,10 +234,6 @@ async function handleConfirmBuy(ctx) {
     
     logWithTime(`[CONFIRM_BUY] Сохранение данных заказа: ${JSON.stringify(orderData, null, 2)}`);
     global.botData.pendingOrders[userId] = orderData;
-    
-    // Проверяем, что заказ сохранен правильно
-    console.log(`[CONFIRM_BUY] Проверка сохраненного заказа:`, 
-      JSON.stringify(global.botData.pendingOrders[userId], null, 2));
     
     // Сразу уведомляем пользователя о обработке запроса для лучшего UX
     await ctx.answerCbQuery('✅ Начинаем оформление заказа');
@@ -301,7 +297,6 @@ async function handleTextInput(ctx) {
     }
     
     logWithTime(`[TEXT] Найден ожидающий заказ для пользователя ${userId}, статус: ${pendingOrders[userId].status}`);
-    console.log(`[TEXT] Данные заказа:`, JSON.stringify(pendingOrders[userId], null, 2));
     
     // Обработка email
     if (pendingOrders[userId].status === 'waiting_email') {
@@ -318,7 +313,6 @@ async function handleTextInput(ctx) {
       pendingOrders[userId].status = 'waiting_phone';
       
       logWithTime(`[TEXT] Email сохранен, новый статус: waiting_phone`);
-      console.log(`[TEXT] Обновленные данные заказа:`, JSON.stringify(pendingOrders[userId], null, 2));
       
       // Запрашиваем номер телефона
       await ctx.reply(messageTemplates.phoneRequest);
@@ -344,13 +338,17 @@ async function handleTextInput(ctx) {
       const product = products[pendingOrders[userId].productId];
       
       logWithTime(`[TEXT] Телефон сохранен, новый статус: waiting_payment`);
-      console.log(`[TEXT] Обновленные данные заказа:`, JSON.stringify(pendingOrders[userId], null, 2));
       
-      // Отправляем изображение с заказом
-      await ctx.replyWithPhoto(
-        { source: 'files/logo.jpg' },
-        { caption: `📋 *Ваш заказ*: ${product.name}` }
-      );
+      try {
+        // Отправляем изображение с заказом
+        await ctx.replyWithPhoto(
+          { source: 'files/logo.jpg' },
+          { caption: `📋 *Ваш заказ*: ${product.name}` }
+        );
+      } catch (photoError) {
+        console.error(`[ERROR] Не удалось отправить логотип: ${photoError.message}`);
+        // Продолжаем выполнение даже если не удалось отправить фото
+      }
       
       // Задержка для лучшего UX
       await new Promise(resolve => setTimeout(resolve, 500));
