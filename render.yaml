@@ -18,6 +18,5 @@ services:
         value: production
       - key: WEBHOOK_MODE
         value: "true"
-      - key: PORT
-        value: "3000"
+      # Удалили переменную PORT, т.к. Render сам её установит
     autoDeploy: false
