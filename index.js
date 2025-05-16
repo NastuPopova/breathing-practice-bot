@@ -24,9 +24,6 @@ const { notifyAdmin, confirmPayment, sendConsultationRecording } = require('./ad
 const { setupPing } = require('./ping');
 const { setupScheduler } = require('./scheduler');
 
-// Настройка Express и инициализация
-app.use(express.json());
-
 // Логирование всех callback запросов
 bot.on('callback_query', (ctx, next) => {
   console.log('=========== CALLBACK QUERY RECEIVED ===========');
