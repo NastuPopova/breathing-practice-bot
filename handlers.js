@@ -1,406 +1,268 @@
-// Файл: handlers.js
-// Обработчики основных сообщений пользователя
+// Файл: bot_handlers.js
+// Дополнительные обработчики и запуск сервера
 
+// Импортируем общую конфигурацию
+const { 
+  app, 
+  bot, 
+  PORT, 
+  APP_URL, 
+  ADMIN_ID, 
+  pendingOrders, 
+  completedOrders,
+  startTime,
+  setupWebhook,
+  logWithTime,
+  formatUptime
+} = require('./config');
+
+// Импортируем модули
 const { products, messageTemplates } = require('./data');
-const { mainKeyboard, logWithTime, validators } = require('./utils');
-const { Markup } = require('telegraf');
+const { mainKeyboard, consultationsKeyboard, removeKeyboard } = require('./utils');
+const { handleTextInput } = require('./handlers');
+const { confirmPayment, sendConsultationRecording } = require('./admin');
+const { setupPing } = require('./ping');
+const { setupScheduler } = require('./scheduler');
 
-// Карта для отслеживания времени последних команд пользователей
-const userLastCommand = new Map();
-
-// Обработчик команды start
-async function handleStart(ctx) {
+// Обновленный обработчик для информационного раздела
+bot.action('show_info', async (ctx) => {
   try {
-    const userId = ctx.from.id;
-    const firstName = ctx.from.first_name || 'друг';
-    
-    // Добавляем дебаунсинг для предотвращения множественных вызовов
-    const currentTime = Date.now();
-    if (userLastCommand.has(userId)) {
-      const timeDiff = currentTime - userLastCommand.get(userId);
-      if (timeDiff < 5000) { // 5000 мс = 5 секунд
-        logWithTime(`[START] Игнорирую повторную команду start от ${userId} (прошло ${timeDiff} мс)`);
-        return;
-      }
-    }
-    
-    // Сохраняем время команды
-    userLastCommand.set(userId, currentTime);
-    
-    logWithTime(`[START] Обработка команды start от пользователя ${userId} (${firstName})`);
-    
-    try {
-      // Отправляем логотип ОДИН РАЗ
-      await ctx.replyWithPhoto(
-        { source: 'files/logo.jpg' },
-        { caption: '🌬️ Дыхательные практики Анастасии Поповой' }
-      );
-      
-      // Небольшая задержка для лучшего UX
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Удаляем клавиатуру и показываем меню с inline-кнопками
-      await ctx.reply(
-        `🌬️ *Добро пожаловать, ${firstName}!* 🌬️
-
-Через этого бота вы можете:
-• Приобрести курсы дыхательных практик
-• Записаться на индивидуальные консультации
-• Получить доступ к материалам и видеоурокам
-
-*Наши практики помогут вам:*
-✅ Повысить энергию и работоспособность
-✅ Снизить уровень стресса
-✅ Улучшить качество сна
-✅ Укрепить здоровье
-
-Выберите действие в меню ниже:`,
-        {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            ...mainKeyboard().reply_markup,
-            remove_keyboard: true
-          }
-        }
-      );
-      
-      logWithTime(`[START] Отправлено приветственное сообщение пользователю ${userId}`);
-    } catch (fileError) {
-      console.error(`[ERROR] Ошибка при отправке логотипа: ${fileError.message}`);
-      // Если не удалось отправить фото, все равно отправляем текстовое сообщение
-      await ctx.reply(
-        `🌬️ *Добро пожаловать, ${firstName}!* 🌬️\n\nВыберите действие в меню ниже:`,
-        {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            ...mainKeyboard().reply_markup,
-            remove_keyboard: true
-          }
-        }
-      );
-    }
-
-    // Уведомление администратору о новом пользователе, но только если это не сам админ
-    const { bot, ADMIN_ID } = global.botData;
-    
-    if (userId !== parseInt(ADMIN_ID)) {
-      // Отправляем уведомление админу асинхронно
-      bot.telegram.sendMessage(
-        ADMIN_ID,
-        `🆕 Новый пользователь:\n- Имя: ${firstName} ${ctx.from.last_name || ''}\n- Username: @${ctx.from.username || 'отсутствует'}\n- ID: ${userId}`
-      )
-      .then(() => logWithTime(`[START] Администратор уведомлен о новом пользователе ${userId}`))
-      .catch(e => console.error(`[ERROR] Ошибка при уведомлении админа: ${e.message}, stack: ${e.stack}`));
-    }
-    
-    logWithTime(`[START] Команда start успешно обработана для пользователя ${userId}, ${ctx.from.username || 'без username'}`);
-  } catch (error) {
-    console.error(`[ERROR] Ошибка в обработчике /start: ${error.message}`);
-    console.error(`[ERROR] Stack trace: ${error.stack}`);
-    
-    // Пытаемся отправить более простое сообщение при ошибке
-    try {
-      await ctx.reply('Привет! Выберите действие в меню:',
-        { reply_markup: mainKeyboard().reply_markup }
-      );
-    } catch (finalError) {
-      console.error(`[CRITICAL] Невозможно отправить сообщение: ${finalError.message}`);
-    }
-  }
-}
-
-// Обработчик выбора продукта
-async function handleBuyAction(ctx) {
-  try {
-    const productId = ctx.match[1];
-    const userId = ctx.from.id;
-    
-    logWithTime(`[BUY] Пользователь ${userId} выбрал продукт с ID: ${productId}`);
-    
-    const product = products[productId];
-    
-    if (!product) {
-      logWithTime(`[BUY] Продукт с ID ${productId} не найден`);
-      await ctx.reply('❌ Продукт не найден. Пожалуйста, выберите из доступных вариантов.', {
-        reply_markup: {
-          ...mainKeyboard().reply_markup,
-          remove_keyboard: true
-        }
-      });
-      return await ctx.answerCbQuery();
-    }
-
-    logWithTime(`[BUY] Найден продукт: ${product.name}`);
-    
-    try {
-      // Пытаемся отправить логотип с названием продукта
-      await ctx.replyWithPhoto(
-        { source: 'files/logo.jpg' },
-        { caption: `🌬️ ${product.name}` }
-      );
-    } catch (photoError) {
-      console.error(`[ERROR] Не удалось отправить логотип: ${photoError.message}`);
-      // Продолжаем выполнение даже если не удалось отправить фото
-    }
+    // Сначала отправляем логотип с подписью
+    await ctx.replyWithPhoto(
+      { source: 'files/logo.jpg' },
+      { caption: '🌬️ Дыхательные практики Анастасии Поповой - Информация о курсах' }
+    );
     
     // Небольшая задержка для лучшего UX
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Используем fullDescription если доступно, иначе используем productInfo
-    const description = product.fullDescription || product.productInfo;
-    logWithTime(`[BUY] Подготовка к отправке описания продукта с кнопками`);
-    
-    // Создаем callback data для кнопки оформления заказа
-    const confirmCallbackData = `confirm_simple_${productId}`;
-    
-    // Создаем стандартную клавиатуру с кнопкой для всех продуктов
-    const inlineKeyboard = Markup.inlineKeyboard([
-      [Markup.button.callback('💳 Оформить заказ', confirmCallbackData)],
-      [Markup.button.callback('◀️ Назад к списку', 'show_products')]
-    ]);
-    
-    // Отправляем сообщение с описанием и кнопками
+    // Отправляем основной текст
     await ctx.reply(
-      description,
+      `ℹ️ *О курсах дыхательных практик*\n\n*Анастасия Попова* - сертифицированный инструктор по дыхательным практикам.\n\nНаши курсы помогут вам:\n\n• Повысить жизненную энергию\n• Снизить уровень стресса\n• Улучшить качество сна\n• Повысить иммунитет\n• Улучшить работу дыхательной системы\n\nВыберите "🛒 Купить курс" в меню, чтобы ознакомиться с доступными программами.`,
       { 
-        parse_mode: 'HTML',
-        reply_markup: inlineKeyboard.reply_markup
+        parse_mode: 'Markdown',
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
       }
     );
     
-    logWithTime(`[BUY] Описание продукта успешно отправлено пользователю ${userId}`);
-    await ctx.answerCbQuery('✅ Загружаю информацию о продукте');
-    
-    logWithTime(`[BUY] Пользователь ${userId} успешно просмотрел продукт: ${product.name}`);
+    await ctx.answerCbQuery();
+    logWithTime(`Пользователь ${ctx.from.id} запросил информацию`);
   } catch (error) {
-    console.error(`[ERROR] Ошибка при выборе продукта: ${error.message}`);
-    console.error(`[ERROR] Stack trace: ${error.stack}`);
-    
-    try {
-      await ctx.reply('Произошла ошибка. Пожалуйста, попробуйте еще раз.', {
-        reply_markup: {
-          ...mainKeyboard().reply_markup,
-          remove_keyboard: true
-        }
-      });
-      await ctx.answerCbQuery('Произошла ошибка');
-    } catch (replyError) {
-      console.error(`[ERROR] Не удалось отправить сообщение об ошибке: ${replyError.message}`);
-    }
+    console.error(`Ошибка при обработке "Информация": ${error.message}`);
+    await ctx.answerCbQuery('Произошла ошибка');
   }
-}
+});
 
-// Обработчик подтверждения начала покупки (устаревший, сохранен для совместимости)
-async function handleConfirmBuy(ctx) {
+bot.action('show_purchases', async (ctx) => {
   try {
-    console.log('[CONFIRM_BUY] ====== НАЧАЛО ОБРАБОТКИ ПОДТВЕРЖДЕНИЯ ПОКУПКИ ======');
-    
-    const productId = ctx.match[1];
     const userId = ctx.from.id;
     
-    logWithTime(`[CONFIRM_BUY] Пользователь ${userId} подтвердил покупку продукта с ID: ${productId}`);
-    
-    const product = products[productId];
-    
-    if (!product) {
-      logWithTime(`[CONFIRM_BUY] Продукт с ID ${productId} не найден`);
-      await ctx.reply('❌ Продукт не найден. Пожалуйста, выберите из доступных вариантов.', {
+    // Проверяем, есть ли у пользователя завершенные заказы
+    if (completedOrders[userId] && completedOrders[userId].length > 0) {
+      // Подготавливаем сообщение заранее для улучшения производительности
+      const purchaseLines = completedOrders[userId].map((order, index) => {
+        const product = products[order.productId];
+        const date = new Date(order.completedAt).toLocaleDateString();
+        return `${index + 1}. *${product.name}*\n   Дата: ${date}\n   Статус: ✅ Оплачено`;
+      });
+      
+      const message = '🛍 *Ваши покупки*:\n\n' + 
+                      purchaseLines.join('\n\n') + 
+                      '\n\nЕсли вам нужны повторно какие-то материалы, просто напишите в чат.';
+      
+      await ctx.reply(message, { 
+        parse_mode: 'Markdown',
         reply_markup: {
           ...mainKeyboard().reply_markup,
           remove_keyboard: true
         }
       });
-      return await ctx.answerCbQuery('Продукт не найден');
+      
+      await ctx.answerCbQuery();
+      logWithTime(`Пользователь ${userId} просмотрел свои покупки`);
+    } else {
+      await ctx.reply(messageTemplates.noPurchases, {
+        reply_markup: {
+          ...mainKeyboard().reply_markup,
+          remove_keyboard: true
+        }
+      });
+      await ctx.answerCbQuery('У вас пока нет покупок');
     }
+  } catch (error) {
+    console.error(`Ошибка при просмотре покупок: ${error.message}`);
+    await ctx.reply('Произошла ошибка при загрузке ваших покупок. Пожалуйста, попробуйте позже.', {
+      reply_markup: {
+        ...mainKeyboard().reply_markup,
+        remove_keyboard: true
+      }
+    });
+    await ctx.answerCbQuery('Произошла ошибка');
+  }
+});
+
+// ... Другие обработчики из index2.js ...
+// Вставьте сюда остальные обработчики из index2.js
+
+// Настройка маршрутов Express
+
+// Главная страница
+app.get('/', (req, res) => {
+  const uptime = Math.floor((new Date() - startTime) / 1000);
+  const uptimeFormatted = formatUptime(uptime);
+  
+  res.send(`
+    <html>
+      <head>
+        <title>Breathing Practice Bot</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+          .status { padding: 10px; border-radius: 5px; margin-bottom: 10px; }
+          .online { background-color: #d4edda; color: #155724; }
+          h1 { color: #5682a3; }
+          .info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <h1>Breathing Practice Bot</h1>
+        <div class="status online">
+          <strong>Status:</strong> Bot is running in webhook mode!
+        </div>
+        <div class="info">
+          <p><strong>Uptime:</strong> ${uptimeFormatted}</p>
+          <p><strong>Started:</strong> ${startTime.toLocaleString()}</p>
+          <p><strong>Last ping:</strong> ${new Date().toLocaleString()}</p>
+          <p><strong>Port:</strong> ${PORT}</p>
+        </div>
+      </body>
+    </html>
+  `);
+  logWithTime(`Запрос к главной странице (uptime: ${uptimeFormatted})`);
+});
+
+// Маршрут для проверки здоровья (важно для Render)
+app.get('/ping', (req, res) => {
+  try {
+    // Отправляем простой текстовый ответ с HTTP кодом 200
+    res.status(200).set('Content-Type', 'text/plain').send('pong');
     
-    logWithTime(`[CONFIRM_BUY] Найден продукт: ${product.name}, подготовка к запросу email`);
-    
-    // Подготавливаем шаблонное сообщение для запроса email
-    const emailRequestMessage = messageTemplates.emailRequest(product.name);
-    
-    // Отправляем запрос email
-    await ctx.reply(
-      emailRequestMessage,
-      { parse_mode: 'Markdown' }
-    );
-    logWithTime(`[CONFIRM_BUY] Запрос email отправлен пользователю ${userId}`);
-    
-    // Сохраняем информацию о выбранном продукте
-    const orderData = {
-      productId,
-      status: 'waiting_email',
-      timestamp: new Date().toISOString()
+    // Обновляем метку времени последней активности
+    global.botData.lastPingTime = new Date();
+  } catch (error) {
+    console.error(`Ошибка при обработке ping-запроса: ${error.message}`);
+    // Даже при ошибке отправляем успешный ответ
+    res.status(200).send('error, but still alive');
+  }
+});
+
+// Маршрут для статуса
+app.get('/status', (req, res) => {
+  try {
+    const status = {
+      status: 'ok',
+      uptime: Math.floor((new Date() - startTime) / 1000),
+      startTime: startTime.toISOString(),
+      currentTime: new Date().toISOString(),
+      webhookMode: true,
+      port: PORT,
+      lastPingTime: global.botData.lastPingTime.toISOString(),
+      memory: process.memoryUsage()
     };
     
-    logWithTime(`[CONFIRM_BUY] Сохранение данных заказа: ${JSON.stringify(orderData, null, 2)}`);
-    global.botData.pendingOrders[userId] = orderData;
-    
-    // Сразу уведомляем пользователя о обработке запроса для лучшего UX
-    await ctx.answerCbQuery('✅ Начинаем оформление заказа');
-    
-    logWithTime(`[CONFIRM_BUY] Пользователь ${userId} успешно начал оформление заказа: ${product.name}`);
-    console.log('[CONFIRM_BUY] ====== КОНЕЦ ОБРАБОТКИ ПОДТВЕРЖДЕНИЯ ПОКУПКИ ======');
+    res.json(status);
+    logWithTime('Запрос статуса бота');
   } catch (error) {
-    console.error(`[ERROR] Ошибка при подтверждении покупки: ${error.message}`);
-    console.error(`[ERROR] Stack trace: ${error.stack}`);
-    
-    try {
-      const userId = ctx.from ? ctx.from.id : 'неизвестный ID';
-      logWithTime(`[ERROR] Произошла ошибка при обработке подтверждения покупки от пользователя ${userId}`);
-      
-      await ctx.reply('Произошла ошибка при оформлении заказа. Пожалуйста, попробуйте еще раз или свяжитесь с нами для помощи.', {
-        reply_markup: {
-          ...mainKeyboard().reply_markup,
-          remove_keyboard: true
-        }
-      });
-      await ctx.answerCbQuery('Произошла ошибка при оформлении');
-    } catch (replyError) {
-      console.error(`[ERROR] Не удалось отправить сообщение об ошибке: ${replyError.message}`);
-    }
+    console.error(`Ошибка при обработке status-запроса: ${error.message}`);
+    res.status(200).json({ status: 'error', message: error.message });
   }
-}
+});
 
-// Обработчик текстовых сообщений (для получения email и телефона)
-async function handleTextInput(ctx) {
+// Запуск приложения и настройка вебхука
+async function startApp() {
   try {
-    const userId = ctx.from.id;
-    const text = ctx.message.text;
+    // Запускаем Express сервер
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
+      logWithTime(`Express сервер запущен на порту ${PORT} и адресе 0.0.0.0`);
+    });
     
-    logWithTime(`[TEXT] Получено текстовое сообщение от пользователя ${userId}: "${text}"`);
+    // Настраиваем вебхук с несколькими попытками
+    let webhookSetup = false;
+    let attempts = 0;
+    const maxAttempts = 5;
     
-    const { pendingOrders } = global.botData;
-    
-    // Если нет ожидающего заказа, возможно, нам нужно показать главное меню
-    if (!pendingOrders[userId]) {
-      logWithTime(`[TEXT] У пользователя ${userId} нет ожидающего заказа`);
-      
-      // Если получена команда /start, не реагируем - она обрабатывается отдельно
-      if (text === '/start') {
-        logWithTime(`[TEXT] Получена команда /start, пропускаем обработку текста`);
-        return;
-      }
-      
-      // Для любого другого текста показываем меню и подсказку, удаляем клавиатуру
-      logWithTime(`[TEXT] Отправка подсказки с меню пользователю ${userId}`);
-      await ctx.reply(
-        'Используйте кнопки меню ниже для навигации:',
-        {
-          reply_markup: {
-            ...mainKeyboard().reply_markup,
-            remove_keyboard: true
-          }
+    while (!webhookSetup && attempts < maxAttempts) {
+      attempts++;
+      try {
+        logWithTime(`Попытка настройки вебхука ${attempts}/${maxAttempts}`);
+        webhookSetup = await setupWebhook();
+        
+        if (webhookSetup) {
+          logWithTime(`Вебхук успешно настроен с ${attempts} попытки`);
+        } else {
+          logWithTime(`Не удалось настроить вебхук (попытка ${attempts}/${maxAttempts})`);
+          // Если не вебхук не настроен, ждем перед следующей попыткой
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
-      );
-      logWithTime(`[TEXT] Подсказка отправлена пользователю ${userId}`);
-      return;
+      } catch (error) {
+        logWithTime(`Ошибка при настройке вебхука (попытка ${attempts}/${maxAttempts}): ${error.message}`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
     }
     
-    logWithTime(`[TEXT] Найден ожидающий заказ для пользователя ${userId}, статус: ${pendingOrders[userId].status}`);
-    
-    // Обработка email
-    if (pendingOrders[userId].status === 'waiting_email') {
-      logWithTime(`[TEXT] Обработка email от пользователя ${userId}`);
+    if (webhookSetup) {
+      logWithTime('Бот успешно настроен в режиме вебхука');
       
-      // Проверка формата email
-      if (!validators.email(text)) {
-        logWithTime(`[TEXT] Некорректный формат email: ${text}`);
-        return await ctx.reply(messageTemplates.emailInvalid);
+      // Настройка самопинга (если указан URL приложения)
+      if (APP_URL) {
+        setupPing(APP_URL, 5); // пинг каждые 5 минут
+        logWithTime(`Настроен самопинг для ${APP_URL}`);
       }
       
-      // Сохраняем email
-      pendingOrders[userId].email = text;
-      pendingOrders[userId].status = 'waiting_phone';
+      // Настройка планировщика задач
+      setupScheduler(bot, ADMIN_ID);
       
-      logWithTime(`[TEXT] Email сохранен, новый статус: waiting_phone`);
-      
-      // Запрашиваем номер телефона
-      await ctx.reply(messageTemplates.phoneRequest);
-      
-      logWithTime(`[TEXT] Запрос телефона отправлен пользователю ${userId}`);
-    } 
-    // Обработка номера телефона
-    else if (pendingOrders[userId].status === 'waiting_phone') {
-      logWithTime(`[TEXT] Обработка номера телефона от пользователя ${userId}`);
-      
-      // Проверка формата телефона
-      const cleanedPhone = text.replace(/\s+/g, '');
-      
-      if (!validators.phone(cleanedPhone)) {
-        logWithTime(`[TEXT] Некорректный формат телефона: ${cleanedPhone}`);
-        return await ctx.reply(messageTemplates.phoneInvalid);
-      }
-      
-      // Сохраняем телефон и обновляем статус
-      pendingOrders[userId].phone = cleanedPhone;
-      pendingOrders[userId].status = 'waiting_payment';
-      
-      const product = products[pendingOrders[userId].productId];
-      
-      logWithTime(`[TEXT] Телефон сохранен, новый статус: waiting_payment`);
-      
-      try {
-        // Отправляем изображение с заказом
-        await ctx.replyWithPhoto(
-          { source: 'files/logo.jpg' },
-          { caption: `📋 *Ваш заказ*: ${product.name}` }
-        );
-      } catch (photoError) {
-        console.error(`[ERROR] Не удалось отправить логотип: ${photoError.message}`);
-        // Продолжаем выполнение даже если не удалось отправить фото
-      }
-      
-      // Задержка для лучшего UX
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Отправляем информацию о заказе с inline-кнопками и удаляем клавиатуру
-      await ctx.reply(
-        messageTemplates.orderReady(product.name, product.price),
-        { 
-          parse_mode: 'Markdown',
-          reply_markup: {
-            ...mainKeyboard().reply_markup,
-            remove_keyboard: true
-          }
+      // Уведомляем админа о запуске
+      if (ADMIN_ID) {
+        try {
+          const botInfo = await bot.telegram.getMe();
+          bot.telegram.sendMessage(
+            ADMIN_ID,
+            `🤖 Бот запущен в режиме вебхука!\n\nВремя запуска: ${new Date().toLocaleString()}\nИмя бота: @${botInfo.username}\nID бота: ${botInfo.id}\nPORT: ${PORT}`
+          ).catch(e => console.warn('Не удалось отправить уведомление:', e.message));
+        } catch (error) {
+          console.error('Ошибка при отправке уведомления админу:', error.message);
         }
-      );
-      
-      logWithTime(`[TEXT] Информация о заказе отправлена пользователю ${userId}`);
-      
-      // Отправляем уведомление администратору
-      try {
-        logWithTime(`[TEXT] Отправка уведомления администратору о новом заказе`);
-        const { notifyAdmin } = require('./admin');
-        await notifyAdmin(userId);
-        logWithTime(`[TEXT] Уведомление успешно отправлено администратору`);
-      } catch (adminError) {
-        console.error(`[ERROR] Ошибка при уведомлении администратора: ${adminError.message}`);
-        console.error(`[ERROR] Stack trace: ${adminError.stack}`);
       }
+    } else {
+      logWithTime('Не удалось настроить вебхук после нескольких попыток');
+      console.error('Не удалось настроить вебхук после нескольких попыток');
     }
   } catch (error) {
-    console.error(`[ERROR] Ошибка при обработке текстового сообщения: ${error.message}`);
-    console.error(`[ERROR] Stack trace: ${error.stack}`);
-    
-    try {
-      await ctx.reply(
-        messageTemplates.errorMessage, 
-        {
-          reply_markup: {
-            ...mainKeyboard().reply_markup,
-            remove_keyboard: true
-          }
-        }
-      );
-    } catch (replyError) {
-      console.error(`[ERROR] Не удалось отправить сообщение об ошибке: ${replyError.message}`);
-    }
+    console.error('Ошибка при запуске приложения:', error);
+    logWithTime(`Ошибка при запуске приложения: ${error.message}`);
   }
 }
 
-module.exports = {
-  handleStart,
-  handleBuyAction,
-  handleConfirmBuy,
-  handleTextInput
-};
+// Настройка graceful shutdown
+process.once('SIGINT', () => {
+  logWithTime('Получен сигнал SIGINT, останавливаем бота...');
+  bot.telegram.deleteWebhook().then(() => {
+    logWithTime('Вебхук удален');
+  });
+  logWithTime('Бот остановлен по SIGINT');
+});
+
+process.once('SIGTERM', () => {
+  logWithTime('Получен сигнал SIGTERM, останавливаем бота...');
+  bot.telegram.deleteWebhook().then(() => {
+    logWithTime('Вебхук удален');
+  });
+  logWithTime('Бот остановлен по SIGTERM');
+});
+
+// Запускаем приложение
+startApp();
