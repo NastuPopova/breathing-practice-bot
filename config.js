@@ -14,7 +14,8 @@ function logWithTime(message) {
 // Получаем и проверяем переменные окружения
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID;
-const APP_URL = process.env.APP_URL;
+// Приоритет: сначала APP_URL, потом RAILWAY_STATIC_URL, затем значение по умолчанию
+const APP_URL = process.env.APP_URL || 'https://breathing-practice-bot-production.up.railway.app';
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const WEBHOOK_MODE = process.env.WEBHOOK_MODE === 'true';
@@ -28,11 +29,12 @@ if (!BOT_TOKEN) {
 // Логирование конфигурации
 console.log('=== КОНФИГУРАЦИЯ ПРИЛОЖЕНИЯ ===');
 console.log('PORT:', PORT);
-console.log('APP_URL:', APP_URL || 'НЕ УКАЗАН');
+console.log('APP_URL:', APP_URL);
 console.log('BOT_TOKEN:', BOT_TOKEN ? 'УКАЗАН (скрыт)' : 'НЕ УКАЗАН');
 console.log('ADMIN_ID:', ADMIN_ID || 'НЕ УКАЗАН');
 console.log('NODE_ENV:', NODE_ENV);
 console.log('WEBHOOK_MODE:', WEBHOOK_MODE);
+console.log('RAILWAY_STATIC_URL:', process.env.RAILWAY_STATIC_URL || 'НЕ УКАЗАН');
 console.log('===============================');
 
 // Создание Express приложения
