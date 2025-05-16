@@ -18,6 +18,6 @@ services:
         value: production
       - key: WEBHOOK_MODE
         value: "true"
-      - key: PORT  # Добавляем переменную PORT
-        value: "3000"  # Значение должно быть строкой
+      - key: PORT
+        value: "3000"
     autoDeploy: false
