@@ -1,38 +1,38 @@
 // Файл: ping.js
-// Функция самопинга для предотвращения сна приложения
+// Оптимизированная версия самопинга для Railway
 
 const fetch = require('node-fetch');
 const { logWithTime } = require('./utils');
 
 /**
- * Функция для настройки само-пинга приложения с расширенной обработкой ошибок
+ * Функция для настройки само-пинга с оптимизированным интервалом для Railway
  * @param {string} url - URL вашего приложения для пинга
- * @param {number} interval - Интервал пинга в минутах (на Railway можно использовать больший интервал)
+ * @param {number} interval - Интервал пинга в минутах (увеличен для Railway)
  */
-function setupPing(url, interval = 10) {
+function setupPing(url, interval = 30) { // Увеличиваем интервал до 30 минут
+  // Убедимся, что URL имеет протокол
+  const baseUrl = url.startsWith('http') ? url : `https://${url}`;
+  const pingUrl = `${baseUrl}/ping`;
+  
   // Конвертируем интервал в миллисекунды
   const intervalMs = interval * 60 * 1000;
   
   // Счетчик успешных пингов
   let successCount = 0;
-  // Счетчик неудачных попыток
-  let failedAttempts = 0;
-  const MAX_FAILED_ATTEMPTS = 3;
   
   // Функция пинга с использованием fetch
   const ping = async () => {
     try {
-      // Railway не засыпает, поэтому пинг нужен в основном для мониторинга
-      logWithTime(`Выполняется пинг ${url}`);
+      logWithTime(`Периодический пинг ${pingUrl}`);
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд тайм-аут
       
-      const response = await fetch(url + '/ping', {
+      const response = await fetch(pingUrl, {
         method: 'GET',
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Breathing Practice Bot Ping Service',
+          'User-Agent': 'Breathing Practice Bot Monitoring Service',
           'Cache-Control': 'no-cache, no-store'
         }
       });
@@ -40,53 +40,32 @@ function setupPing(url, interval = 10) {
       clearTimeout(timeoutId);
       
       if (response.ok) {
-        const text = await response.text();
         successCount++;
-        failedAttempts = 0; // Сбрасываем счетчик неудач
-        
-        // Логируем, но реже
-        if (successCount % 10 === 0) {
-          logWithTime(`Пинг успешен (${successCount}): ${url}/ping (${response.status} ${text})`);
+        // Логируем только каждый 5-й успешный пинг для уменьшения шума в логах
+        if (successCount % 5 === 0) {
+          logWithTime(`Мониторинг активен, успешных пингов: ${successCount}`);
         }
       } else {
-        failedAttempts++;
-        logWithTime(`Пинг не удался со статусом ${response.status}. Неудачных попыток подряд: ${failedAttempts}`);
+        logWithTime(`Ping не удался со статусом ${response.status}`);
       }
     } catch (error) {
-      failedAttempts++;
-      logWithTime(`Ошибка пинга: ${error.message}. Неудачных попыток подряд: ${failedAttempts}`);
-      
-      // Если слишком много последовательных неудач, уведомляем админа
-      if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-        logWithTime(`КРИТИЧЕСКАЯ ОШИБКА: Не удается пропинговать ${url} ${failedAttempts} раз(а) подряд`);
-        
-        try {
-          const { bot, ADMIN_ID } = global.botData || {};
-          if (bot && ADMIN_ID) {
-            bot.telegram.sendMessage(
-              ADMIN_ID, 
-              `❗️ КРИТИЧЕСКАЯ ОШИБКА: Не удается пропинговать ${url} ${failedAttempts} раз(а) подряд`
-            ).catch(e => console.error('Не удалось отправить аварийное уведомление:', e.message));
-          }
-        } catch (notificationError) {
-          console.error('Ошибка при отправке аварийного уведомления:', notificationError);
-        }
-      }
+      logWithTime(`Ошибка мониторинга: ${error.message}`);
     } finally {
       // Планируем следующий пинг
       setTimeout(ping, intervalMs);
     }
   };
   
-  // Запускаем первый пинг с задержкой в 30 секунд (дать приложению время запуститься)
+  // Запускаем первый пинг через 2 минуты после запуска
+  // (даем приложению время полностью загрузиться)
   setTimeout(() => {
     ping();
-    logWithTime(`Настроен пинг для ${url} с интервалом ${interval} минут`);
-  }, 30 * 1000);
+    logWithTime(`Настроен мониторинг для ${pingUrl} с интервалом ${interval} минут`);
+  }, 2 * 60 * 1000);
   
   return {
     stop: () => {
-      logWithTime('Интервал пинга остановлен');
+      logWithTime('Мониторинг остановлен');
     }
   };
 }
