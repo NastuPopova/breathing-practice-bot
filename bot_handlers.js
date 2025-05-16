@@ -1,5 +1,5 @@
 // Файл: bot_handlers.js
-// Дополнительные обработчики и запуск сервера
+// Дополнительные обработчики и запуск сервера с оптимизацией для Railway
 
 // Импортируем общую конфигурацию
 const { 
@@ -23,6 +23,9 @@ const { handleTextInput } = require('./handlers');
 const { confirmPayment, sendConsultationRecording } = require('./admin');
 const { setupPing } = require('./ping');
 const { setupScheduler } = require('./scheduler');
+
+// Флаг оптимизации для Railway
+const RAILWAY_OPTIMIZED_MODE = true;
 
 // Обновленный обработчик для информационного раздела
 bot.action('show_info', async (ctx) => {
@@ -65,21 +68,24 @@ bot.action('show_purchases', async (ctx) => {
 
 // Настройка маршрутов Express
 
-// Главная страница
+// Главная страница с расширенной информацией для Railway
 app.get('/', (req, res) => {
   const uptime = Math.floor((new Date() - startTime) / 1000);
   const uptimeFormatted = formatUptime(uptime);
+  const memoryUsage = process.memoryUsage();
   
   res.send(`
     <html>
       <head>
-        <title>Breathing Practice Bot</title>
+        <title>Breathing Practice Bot - Railway Edition</title>
         <style>
           body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
           .status { padding: 10px; border-radius: 5px; margin-bottom: 10px; }
           .online { background-color: #d4edda; color: #155724; }
+          .railway { background-color: #e3f2fd; color: #0d47a1; }
           h1 { color: #5682a3; }
-          .info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; }
+          .info { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 15px; }
+          .memory { background-color: #fff3cd; padding: 15px; border-radius: 5px; }
         </style>
       </head>
       <body>
@@ -87,12 +93,21 @@ app.get('/', (req, res) => {
         <div class="status online">
           <strong>Status:</strong> Bot is running on Railway!
         </div>
+        <div class="status railway">
+          <strong>Mode:</strong> Railway Optimized (${RAILWAY_OPTIMIZED_MODE ? 'Enabled' : 'Disabled'})
+        </div>
         <div class="info">
           <p><strong>Uptime:</strong> ${uptimeFormatted}</p>
           <p><strong>Started:</strong> ${startTime.toLocaleString()}</p>
           <p><strong>Last ping:</strong> ${new Date().toLocaleString()}</p>
           <p><strong>Port:</strong> ${PORT}</p>
           <p><strong>Webhook URL:</strong> ${APP_URL}</p>
+        </div>
+        <div class="memory">
+          <p><strong>Memory Usage:</strong></p>
+          <p>RSS: ${Math.round(memoryUsage.rss / 1024 / 1024)} MB</p>
+          <p>Heap Total: ${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB</p>
+          <p>Heap Used: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB</p>
         </div>
       </body>
     </html>
@@ -115,12 +130,15 @@ app.get('/ping', (req, res) => {
   }
 });
 
-// Маршрут для статуса
+// Расширенный маршрут для статуса с дополнительной информацией для Railway
 app.get('/status', (req, res) => {
   try {
+    const uptimeSeconds = Math.floor((new Date() - startTime) / 1000);
     const status = {
       status: 'ok',
-      uptime: Math.floor((new Date() - startTime) / 1000),
+      railway_optimized: RAILWAY_OPTIMIZED_MODE,
+      uptime: uptimeSeconds,
+      uptime_formatted: formatUptime(uptimeSeconds),
       startTime: startTime.toISOString(),
       currentTime: new Date().toISOString(),
       webhookMode: true,
@@ -128,7 +146,17 @@ app.get('/status', (req, res) => {
       port: PORT,
       platform: 'Railway',
       lastPingTime: global.botData.lastPingTime.toISOString(),
-      memory: process.memoryUsage()
+      memory: process.memoryUsage(),
+      memory_mb: {
+        rss: Math.round(process.memoryUsage().rss / 1024 / 1024),
+        heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024)
+      },
+      environment: {
+        node_version: process.version,
+        platform: process.platform,
+        arch: process.arch
+      }
     };
     
     res.json(status);
@@ -139,7 +167,7 @@ app.get('/status', (req, res) => {
   }
 });
 
-// Запуск приложения и настройка вебхука
+// Запуск приложения и настройка вебхука с оптимизациями для Railway
 async function startApp() {
   try {
     // Запускаем Express сервер
@@ -176,22 +204,25 @@ async function startApp() {
     if (webhookSetup) {
       logWithTime('Бот успешно настроен в режиме вебхука');
       
-      // Настройка самопинга (с меньшей частотой для Railway)
+      // Настройка самопинга с увеличенным интервалом для Railway
       if (APP_URL) {
-        setupPing(APP_URL, 15); // на Railway можно пинговать реже
-        logWithTime(`Настроен самопинг для ${APP_URL}`);
+        const pingInterval = RAILWAY_OPTIMIZED_MODE ? 30 : 15; // 30 минут в оптимизированном режиме
+        setupPing(APP_URL, pingInterval);
+        logWithTime(`Настроен самопинг для ${APP_URL} с интервалом ${pingInterval} минут`);
       }
       
-      // Настройка планировщика задач
-      setupScheduler(bot, ADMIN_ID);
+      // Настройка планировщика задач с оптимизациями для Railway
+      setupScheduler(bot, ADMIN_ID, RAILWAY_OPTIMIZED_MODE);
       
       // Уведомляем админа о запуске
       if (ADMIN_ID) {
         try {
           const botInfo = await bot.telegram.getMe();
+          const memoryInfo = `Память: ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB`;
+          
           bot.telegram.sendMessage(
             ADMIN_ID,
-            `🤖 Бот запущен на Railway!\n\nВремя запуска: ${new Date().toLocaleString()}\nИмя бота: @${botInfo.username}\nID бота: ${botInfo.id}\nURL: ${APP_URL}\nPORT: ${PORT}`
+            `🤖 Бот запущен на Railway!\n\nВремя запуска: ${new Date().toLocaleString()}\nИмя бота: @${botInfo.username}\nID бота: ${botInfo.id}\nURL: ${APP_URL}\nPORT: ${PORT}\nРежим оптимизации: ${RAILWAY_OPTIMIZED_MODE ? 'Включен ✅' : 'Выключен ❌'}\n${memoryInfo}`
           ).catch(e => console.warn('Не удалось отправить уведомление:', e.message));
         } catch (error) {
           console.error('Ошибка при отправке уведомления админу:', error.message);
@@ -207,9 +238,12 @@ async function startApp() {
   }
 }
 
-// Настройка graceful shutdown
+// Настройка graceful shutdown с логированием памяти
 process.once('SIGINT', () => {
   logWithTime('Получен сигнал SIGINT, останавливаем бота...');
+  const memoryInfo = `Память при остановке: ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB`;
+  logWithTime(memoryInfo);
+  
   bot.telegram.deleteWebhook().then(() => {
     logWithTime('Вебхук удален');
   });
@@ -218,6 +252,9 @@ process.once('SIGINT', () => {
 
 process.once('SIGTERM', () => {
   logWithTime('Получен сигнал SIGTERM, останавливаем бота...');
+  const memoryInfo = `Память при остановке: ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB`;
+  logWithTime(memoryInfo);
+  
   bot.telegram.deleteWebhook().then(() => {
     logWithTime('Вебхук удален');
   });
