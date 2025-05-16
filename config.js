@@ -38,6 +38,9 @@ console.log('===============================');
 // Создание Express приложения
 const app = express();
 
+// Обработка JSON
+app.use(express.json());
+
 // Создание бота с токеном от BotFather
 const bot = new Telegraf(BOT_TOKEN);
 
