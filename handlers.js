@@ -2,7 +2,7 @@
 // Обработчики основных сообщений пользователя
 
 const { products, messageTemplates } = require('./data');
-const { mainKeyboard, logWithTime, validators } = require('./utils');
+const { mainKeyboard, logWithTime, validators, getUserName } = require('./utils');
 const { Markup } = require('telegraf');
 
 // Карта для отслеживания времени последних команд пользователей
@@ -12,7 +12,9 @@ const userLastCommand = new Map();
 async function handleStart(ctx) {
   try {
     const userId = ctx.from.id;
-    const firstName = ctx.from.first_name || 'друг';
+    
+    // Используем функцию getUserName для получения имени пользователя
+    const firstName = getUserName(ctx.from);
     
     // Добавляем дебаунсинг для предотвращения множественных вызовов
     const currentTime = Date.now();
