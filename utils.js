@@ -93,6 +93,56 @@ const validators = {
   }
 };
 
+/**
+ * Функция для получения лучшего варианта обращения к пользователю
+ * Возвращает имя пользователя из доступных данных с учетом предпочтений
+ * 
+ * @param {Object} user - Объект пользователя из ctx.from
+ * @param {boolean} useLongName - Использовать ли полное имя, если доступно
+ * @returns {string} - Имя пользователя для обращения
+ */
+function getUserName(user, useLongName = false) {
+  if (!user) return 'друг';
+  
+  // Получаем доступные данные
+  const firstName = user.first_name ? user.first_name.trim() : '';
+  const lastName = user.last_name ? user.last_name.trim() : '';
+  const username = user.username ? user.username.trim() : '';
+  
+  // Детектор русских имен/фамилий - примерный признак наличия кириллицы
+  const isCyrillic = (text) => /[а-яА-ЯёЁ]/.test(text);
+  
+  // Проверяем, есть ли имя
+  if (firstName) {
+    // В русских именах может быть указано "Иван Иванович" - пытаемся выделить первую часть
+    if (isCyrillic(firstName) && firstName.includes(' ')) {
+      // Если есть пробел, берем первую часть (предположительно имя без отчества)
+      return firstName.split(' ')[0];
+    }
+    
+    // Для длинного формата можем добавить фамилию
+    if (useLongName && lastName) {
+      return `${firstName} ${lastName}`;
+    }
+    
+    // В остальных случаях возвращаем просто имя
+    return firstName;
+  }
+  
+  // Если имени нет, но есть username
+  if (username) {
+    return username;
+  }
+  
+  // Если есть только фамилия
+  if (lastName) {
+    return lastName;
+  }
+  
+  // Если ничего нет, используем стандартное обращение
+  return 'друг';
+}
+
 module.exports = {
   mainKeyboard,
   consultationsKeyboard,
@@ -100,5 +150,5 @@ module.exports = {
   sendMessageWithInlineKeyboard,
   fileExists,
   logWithTime,
-  validators
-};
+  validators,
+  getUserName
